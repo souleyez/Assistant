@@ -1,22 +1,26 @@
-# Assistant
+# Gemma 4 YOLO Studio
 
-`Assistant` 是从 `ai-data-platform` 主应用面向新技术栈重建的仓库：
+`Gemma 4 YOLO Studio` 是一个纯单机版训练平台：
 
 - 前端：Vue 3 + Vite
 - 后端：Java 8 + Spring Boot 2.7
+- 运行模式：单机工作站，本地数据、本地训练、本地模型产物
 
-当前首版迁移范围聚焦原仓库的主业务应用：
+当前首版聚焦这 6 条主线：
 
-- 工作台首页
-- 文档中心
-- 数据源工作台
-- 报表中心
+- 总览
+- 数据集管理
+- 训练项目管理
+- 训练任务队列
+- 模型仓库
+- Gemma 4 助手建议位
 
-暂未纳入首版：
+当前版本不做这些事情：
 
-- Windows 安装器与客户端发布链
-- 原 `worker` 进程
-- 冻结中的 control-plane 目录
+- 不和其他项目做联动
+- 不接入多机调度或集群
+- 不引入对象存储或外部任务编排
+- 不保留旧的文档/报表业务语义
 
 ## 目录
 
@@ -48,9 +52,44 @@ mvn spring-boot:run
 
 如果本机没有 Maven，请先安装 Maven 3.9+，或者直接用 IntelliJ IDEA / VS Code Java 插件导入 `backend/pom.xml` 后运行。
 
-## 迁移说明
+## 当前数据模型
 
-- 原 Next.js 页面被重组为 Vue Router 页面
-- 原 Fastify API 被收敛为 Spring Boot REST 控制器
-- 首版后端使用本地 JSON 文件做轻量持久化，便于快速接手和后续替换成数据库
-- 接口命名尽量保留原项目语义，降低迁移成本
+- `datasets`
+  - 本地 YOLO 数据集目录、样本数、类别数、版本、标注格式
+- `projects`
+  - 训练规格，包括数据集绑定、YOLO 版本、超参数、实验目标
+- `jobs`
+  - 单机训练任务、进度、指标、输出目录、日志、权重目录
+- `models`
+  - 训练产物或手工登记模型
+- `gemmaConversations`
+  - Gemma 4 助手建议记录
+
+## 说明
+
+- 当前后端使用本地 JSON 文件做轻量持久化
+- Gemma 4 当前先以平台内建议引擎占位，便于后续接真实本地推理服务
+- 训练任务现在会生成本地运行目录、数据集 yaml、训练脚本和日志文件
+- 默认通过 `python` 启动训练；如果你要指定解释器，可设置环境变量 `YOLO_PYTHON`
+
+## 本机训练前提
+
+建议先准备一个单独的 Python 环境，并安装：
+
+```powershell
+pip install ultralytics
+```
+
+如果 `python` 不是你想用的解释器，可以在启动后端前指定：
+
+```powershell
+$env:YOLO_PYTHON = 'D:\miniconda3\envs\gemma4-yolo\python.exe'
+```
+
+训练任务启动后，平台会在本地生成：
+
+- 运行目录
+- `dataset.yaml`
+- PowerShell 启动脚本
+- Python 训练脚本
+- `train.log`

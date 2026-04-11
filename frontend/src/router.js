@@ -1,16 +1,20 @@
 import { createRouter, createWebHistory } from 'vue-router'
-import DashboardPage from './views/DashboardPage.vue'
-import DocumentsPage from './views/DocumentsPage.vue'
-import DatasourcesPage from './views/DatasourcesPage.vue'
-import ReportsPage from './views/ReportsPage.vue'
+import OverviewPage from './views/OverviewPage.vue'
+import DatasetsPage from './views/DatasetsPage.vue'
+import ProjectsPage from './views/ProjectsPage.vue'
+import JobsPage from './views/JobsPage.vue'
+import ModelsPage from './views/ModelsPage.vue'
+import GemmaPage from './views/GemmaPage.vue'
 
 const router = createRouter({
   history: createWebHistory(),
   routes: [
-    { path: '/', name: 'dashboard', component: DashboardPage },
-    { path: '/documents', name: 'documents', component: DocumentsPage },
-    { path: '/datasources', name: 'datasources', component: DatasourcesPage },
-    { path: '/reports', name: 'reports', component: ReportsPage },
+    { path: '/', name: 'overview', component: OverviewPage },
+    { path: '/datasets', name: 'datasets', component: DatasetsPage },
+    { path: '/projects', name: 'projects', component: ProjectsPage },
+    { path: '/jobs', name: 'jobs', component: JobsPage },
+    { path: '/models', name: 'models', component: ModelsPage },
+    { path: '/gemma', name: 'gemma', component: GemmaPage },
   ],
 })
 

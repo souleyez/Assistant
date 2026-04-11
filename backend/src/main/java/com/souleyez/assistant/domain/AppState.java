@@ -4,78 +4,60 @@ import java.util.ArrayList;
 import java.util.List;
 
 public class AppState {
-  private ModelState model;
-  private List<Library> libraries = new ArrayList<Library>();
-  private List<DocumentItem> documents = new ArrayList<DocumentItem>();
-  private List<DatasourceDefinition> datasources = new ArrayList<DatasourceDefinition>();
-  private List<DatasourceRun> datasourceRuns = new ArrayList<DatasourceRun>();
-  private List<BotItem> bots = new ArrayList<BotItem>();
-  private List<ReportTemplate> templates = new ArrayList<ReportTemplate>();
-  private List<OutputRecord> outputRecords = new ArrayList<OutputRecord>();
+  private PlatformState platform;
+  private List<Dataset> datasets = new ArrayList<Dataset>();
+  private List<TrainingProject> projects = new ArrayList<TrainingProject>();
+  private List<TrainingJob> jobs = new ArrayList<TrainingJob>();
+  private List<ModelArtifact> models = new ArrayList<ModelArtifact>();
+  private List<GemmaConversation> gemmaConversations = new ArrayList<GemmaConversation>();
   private List<TimelineEntry> timeline = new ArrayList<TimelineEntry>();
 
-  public ModelState getModel() {
-    return model;
+  public PlatformState getPlatform() {
+    return platform;
   }
 
-  public void setModel(ModelState model) {
-    this.model = model;
+  public void setPlatform(PlatformState platform) {
+    this.platform = platform;
   }
 
-  public List<Library> getLibraries() {
-    return libraries;
+  public List<Dataset> getDatasets() {
+    return datasets;
   }
 
-  public void setLibraries(List<Library> libraries) {
-    this.libraries = libraries;
+  public void setDatasets(List<Dataset> datasets) {
+    this.datasets = datasets;
   }
 
-  public List<DocumentItem> getDocuments() {
-    return documents;
+  public List<TrainingProject> getProjects() {
+    return projects;
   }
 
-  public void setDocuments(List<DocumentItem> documents) {
-    this.documents = documents;
+  public void setProjects(List<TrainingProject> projects) {
+    this.projects = projects;
   }
 
-  public List<DatasourceDefinition> getDatasources() {
-    return datasources;
+  public List<TrainingJob> getJobs() {
+    return jobs;
   }
 
-  public void setDatasources(List<DatasourceDefinition> datasources) {
-    this.datasources = datasources;
+  public void setJobs(List<TrainingJob> jobs) {
+    this.jobs = jobs;
   }
 
-  public List<DatasourceRun> getDatasourceRuns() {
-    return datasourceRuns;
+  public List<ModelArtifact> getModels() {
+    return models;
   }
 
-  public void setDatasourceRuns(List<DatasourceRun> datasourceRuns) {
-    this.datasourceRuns = datasourceRuns;
+  public void setModels(List<ModelArtifact> models) {
+    this.models = models;
   }
 
-  public List<BotItem> getBots() {
-    return bots;
+  public List<GemmaConversation> getGemmaConversations() {
+    return gemmaConversations;
   }
 
-  public void setBots(List<BotItem> bots) {
-    this.bots = bots;
-  }
-
-  public List<ReportTemplate> getTemplates() {
-    return templates;
-  }
-
-  public void setTemplates(List<ReportTemplate> templates) {
-    this.templates = templates;
-  }
-
-  public List<OutputRecord> getOutputRecords() {
-    return outputRecords;
-  }
-
-  public void setOutputRecords(List<OutputRecord> outputRecords) {
-    this.outputRecords = outputRecords;
+  public void setGemmaConversations(List<GemmaConversation> gemmaConversations) {
+    this.gemmaConversations = gemmaConversations;
   }
 
   public List<TimelineEntry> getTimeline() {
@@ -86,170 +68,191 @@ public class AppState {
     this.timeline = timeline;
   }
 
-  public static class ModelState {
-    private OpenClawState openclaw;
-    private String currentModel;
-    private List<String> providers = new ArrayList<String>();
+  public static class PlatformState {
+    private MachineProfile machine;
+    private RuntimeProfile runtime;
 
-    public OpenClawState getOpenclaw() {
-      return openclaw;
+    public MachineProfile getMachine() {
+      return machine;
     }
 
-    public void setOpenclaw(OpenClawState openclaw) {
-      this.openclaw = openclaw;
+    public void setMachine(MachineProfile machine) {
+      this.machine = machine;
     }
 
-    public String getCurrentModel() {
-      return currentModel;
+    public RuntimeProfile getRuntime() {
+      return runtime;
     }
 
-    public void setCurrentModel(String currentModel) {
-      this.currentModel = currentModel;
-    }
-
-    public List<String> getProviders() {
-      return providers;
-    }
-
-    public void setProviders(List<String> providers) {
-      this.providers = providers;
+    public void setRuntime(RuntimeProfile runtime) {
+      this.runtime = runtime;
     }
   }
 
-  public static class OpenClawState {
-    private boolean installed;
-    private boolean running;
-    private String gatewayUrl;
+  public static class MachineProfile {
+    private String hostName;
+    private String mode;
+    private String workspacePath;
+    private String gpu;
+    private int gpuCount;
+    private int memoryGb;
+    private String storagePolicy;
 
-    public boolean isInstalled() {
-      return installed;
+    public String getHostName() {
+      return hostName;
     }
 
-    public void setInstalled(boolean installed) {
-      this.installed = installed;
+    public void setHostName(String hostName) {
+      this.hostName = hostName;
     }
 
-    public boolean isRunning() {
-      return running;
+    public String getMode() {
+      return mode;
     }
 
-    public void setRunning(boolean running) {
-      this.running = running;
+    public void setMode(String mode) {
+      this.mode = mode;
     }
 
-    public String getGatewayUrl() {
-      return gatewayUrl;
+    public String getWorkspacePath() {
+      return workspacePath;
     }
 
-    public void setGatewayUrl(String gatewayUrl) {
-      this.gatewayUrl = gatewayUrl;
+    public void setWorkspacePath(String workspacePath) {
+      this.workspacePath = workspacePath;
+    }
+
+    public String getGpu() {
+      return gpu;
+    }
+
+    public void setGpu(String gpu) {
+      this.gpu = gpu;
+    }
+
+    public int getGpuCount() {
+      return gpuCount;
+    }
+
+    public void setGpuCount(int gpuCount) {
+      this.gpuCount = gpuCount;
+    }
+
+    public int getMemoryGb() {
+      return memoryGb;
+    }
+
+    public void setMemoryGb(int memoryGb) {
+      this.memoryGb = memoryGb;
+    }
+
+    public String getStoragePolicy() {
+      return storagePolicy;
+    }
+
+    public void setStoragePolicy(String storagePolicy) {
+      this.storagePolicy = storagePolicy;
     }
   }
 
-  public static class Library {
-    private String key;
-    private String label;
-    private int documentCount;
+  public static class RuntimeProfile {
+    private String gemmaModel;
+    private String yoloEngine;
+    private String pythonEnv;
+    private String pythonCommand;
+    private String trainingWorkspace;
+    private String defaultBaseModel;
+    private boolean gemmaReady;
+    private boolean yoloReady;
+    private boolean trainingBusy;
 
-    public String getKey() {
-      return key;
+    public String getGemmaModel() {
+      return gemmaModel;
     }
 
-    public void setKey(String key) {
-      this.key = key;
+    public void setGemmaModel(String gemmaModel) {
+      this.gemmaModel = gemmaModel;
     }
 
-    public String getLabel() {
-      return label;
+    public String getYoloEngine() {
+      return yoloEngine;
     }
 
-    public void setLabel(String label) {
-      this.label = label;
+    public void setYoloEngine(String yoloEngine) {
+      this.yoloEngine = yoloEngine;
     }
 
-    public int getDocumentCount() {
-      return documentCount;
+    public String getPythonEnv() {
+      return pythonEnv;
     }
 
-    public void setDocumentCount(int documentCount) {
-      this.documentCount = documentCount;
+    public void setPythonEnv(String pythonEnv) {
+      this.pythonEnv = pythonEnv;
+    }
+
+    public String getPythonCommand() {
+      return pythonCommand;
+    }
+
+    public void setPythonCommand(String pythonCommand) {
+      this.pythonCommand = pythonCommand;
+    }
+
+    public String getTrainingWorkspace() {
+      return trainingWorkspace;
+    }
+
+    public void setTrainingWorkspace(String trainingWorkspace) {
+      this.trainingWorkspace = trainingWorkspace;
+    }
+
+    public String getDefaultBaseModel() {
+      return defaultBaseModel;
+    }
+
+    public void setDefaultBaseModel(String defaultBaseModel) {
+      this.defaultBaseModel = defaultBaseModel;
+    }
+
+    public boolean isGemmaReady() {
+      return gemmaReady;
+    }
+
+    public void setGemmaReady(boolean gemmaReady) {
+      this.gemmaReady = gemmaReady;
+    }
+
+    public boolean isYoloReady() {
+      return yoloReady;
+    }
+
+    public void setYoloReady(boolean yoloReady) {
+      this.yoloReady = yoloReady;
+    }
+
+    public boolean isTrainingBusy() {
+      return trainingBusy;
+    }
+
+    public void setTrainingBusy(boolean trainingBusy) {
+      this.trainingBusy = trainingBusy;
     }
   }
 
-  public static class DocumentItem {
+  public static class Dataset {
     private String id;
     private String name;
-    private String libraryKey;
-    private String libraryLabel;
-    private String fileType;
-    private String parseStatus;
-    private String updatedAt;
-
-    public String getId() {
-      return id;
-    }
-
-    public void setId(String id) {
-      this.id = id;
-    }
-
-    public String getName() {
-      return name;
-    }
-
-    public void setName(String name) {
-      this.name = name;
-    }
-
-    public String getLibraryKey() {
-      return libraryKey;
-    }
-
-    public void setLibraryKey(String libraryKey) {
-      this.libraryKey = libraryKey;
-    }
-
-    public String getLibraryLabel() {
-      return libraryLabel;
-    }
-
-    public void setLibraryLabel(String libraryLabel) {
-      this.libraryLabel = libraryLabel;
-    }
-
-    public String getFileType() {
-      return fileType;
-    }
-
-    public void setFileType(String fileType) {
-      this.fileType = fileType;
-    }
-
-    public String getParseStatus() {
-      return parseStatus;
-    }
-
-    public void setParseStatus(String parseStatus) {
-      this.parseStatus = parseStatus;
-    }
-
-    public String getUpdatedAt() {
-      return updatedAt;
-    }
-
-    public void setUpdatedAt(String updatedAt) {
-      this.updatedAt = updatedAt;
-    }
-  }
-
-  public static class DatasourceDefinition {
-    private String id;
-    private String name;
-    private String kind;
-    private String endpoint;
+    private String taskType;
+    private String storagePath;
+    private int imageCount;
+    private int classCount;
+    private int version;
+    private String labelFormat;
+    private String splitStrategy;
     private String status;
-    private List<String> targetLibraryKeys = new ArrayList<String>();
     private String updatedAt;
+    private String notes;
+    private List<String> classNames = new ArrayList<String>();
 
     public String getId() {
       return id;
@@ -267,20 +270,60 @@ public class AppState {
       this.name = name;
     }
 
-    public String getKind() {
-      return kind;
+    public String getTaskType() {
+      return taskType;
     }
 
-    public void setKind(String kind) {
-      this.kind = kind;
+    public void setTaskType(String taskType) {
+      this.taskType = taskType;
     }
 
-    public String getEndpoint() {
-      return endpoint;
+    public String getStoragePath() {
+      return storagePath;
     }
 
-    public void setEndpoint(String endpoint) {
-      this.endpoint = endpoint;
+    public void setStoragePath(String storagePath) {
+      this.storagePath = storagePath;
+    }
+
+    public int getImageCount() {
+      return imageCount;
+    }
+
+    public void setImageCount(int imageCount) {
+      this.imageCount = imageCount;
+    }
+
+    public int getClassCount() {
+      return classCount;
+    }
+
+    public void setClassCount(int classCount) {
+      this.classCount = classCount;
+    }
+
+    public int getVersion() {
+      return version;
+    }
+
+    public void setVersion(int version) {
+      this.version = version;
+    }
+
+    public String getLabelFormat() {
+      return labelFormat;
+    }
+
+    public void setLabelFormat(String labelFormat) {
+      this.labelFormat = labelFormat;
+    }
+
+    public String getSplitStrategy() {
+      return splitStrategy;
+    }
+
+    public void setSplitStrategy(String splitStrategy) {
+      this.splitStrategy = splitStrategy;
     }
 
     public String getStatus() {
@@ -291,12 +334,140 @@ public class AppState {
       this.status = status;
     }
 
-    public List<String> getTargetLibraryKeys() {
-      return targetLibraryKeys;
+    public String getUpdatedAt() {
+      return updatedAt;
     }
 
-    public void setTargetLibraryKeys(List<String> targetLibraryKeys) {
-      this.targetLibraryKeys = targetLibraryKeys;
+    public void setUpdatedAt(String updatedAt) {
+      this.updatedAt = updatedAt;
+    }
+
+    public String getNotes() {
+      return notes;
+    }
+
+    public void setNotes(String notes) {
+      this.notes = notes;
+    }
+
+    public List<String> getClassNames() {
+      return classNames;
+    }
+
+    public void setClassNames(List<String> classNames) {
+      this.classNames = classNames;
+    }
+  }
+
+  public static class TrainingProject {
+    private String id;
+    private String name;
+    private String objective;
+    private String datasetId;
+    private String datasetName;
+    private String yoloVersion;
+    private int imageSize;
+    private int epochs;
+    private int batchSize;
+    private String optimizer;
+    private String status;
+    private String owner;
+    private String updatedAt;
+
+    public String getId() {
+      return id;
+    }
+
+    public void setId(String id) {
+      this.id = id;
+    }
+
+    public String getName() {
+      return name;
+    }
+
+    public void setName(String name) {
+      this.name = name;
+    }
+
+    public String getObjective() {
+      return objective;
+    }
+
+    public void setObjective(String objective) {
+      this.objective = objective;
+    }
+
+    public String getDatasetId() {
+      return datasetId;
+    }
+
+    public void setDatasetId(String datasetId) {
+      this.datasetId = datasetId;
+    }
+
+    public String getDatasetName() {
+      return datasetName;
+    }
+
+    public void setDatasetName(String datasetName) {
+      this.datasetName = datasetName;
+    }
+
+    public String getYoloVersion() {
+      return yoloVersion;
+    }
+
+    public void setYoloVersion(String yoloVersion) {
+      this.yoloVersion = yoloVersion;
+    }
+
+    public int getImageSize() {
+      return imageSize;
+    }
+
+    public void setImageSize(int imageSize) {
+      this.imageSize = imageSize;
+    }
+
+    public int getEpochs() {
+      return epochs;
+    }
+
+    public void setEpochs(int epochs) {
+      this.epochs = epochs;
+    }
+
+    public int getBatchSize() {
+      return batchSize;
+    }
+
+    public void setBatchSize(int batchSize) {
+      this.batchSize = batchSize;
+    }
+
+    public String getOptimizer() {
+      return optimizer;
+    }
+
+    public void setOptimizer(String optimizer) {
+      this.optimizer = optimizer;
+    }
+
+    public String getStatus() {
+      return status;
+    }
+
+    public void setStatus(String status) {
+      this.status = status;
+    }
+
+    public String getOwner() {
+      return owner;
+    }
+
+    public void setOwner(String owner) {
+      this.owner = owner;
     }
 
     public String getUpdatedAt() {
@@ -308,13 +479,27 @@ public class AppState {
     }
   }
 
-  public static class DatasourceRun {
+  public static class TrainingJob {
     private String id;
-    private String datasourceId;
-    private String datasourceName;
+    private String projectId;
+    private String projectName;
+    private String datasetName;
     private String status;
-    private int capturedCount;
+    private double map50;
+    private double precisionScore;
+    private double recallScore;
+    private double loss;
+    private int currentEpoch;
+    private int totalEpochs;
     private String startedAt;
+    private String updatedAt;
+    private String outputPath;
+    private String queueMode;
+    private String logPath;
+    private String weightsPath;
+    private String datasetConfigPath;
+    private String commandLine;
+    private String failureMessage;
 
     public String getId() {
       return id;
@@ -324,20 +509,28 @@ public class AppState {
       this.id = id;
     }
 
-    public String getDatasourceId() {
-      return datasourceId;
+    public String getProjectId() {
+      return projectId;
     }
 
-    public void setDatasourceId(String datasourceId) {
-      this.datasourceId = datasourceId;
+    public void setProjectId(String projectId) {
+      this.projectId = projectId;
     }
 
-    public String getDatasourceName() {
-      return datasourceName;
+    public String getProjectName() {
+      return projectName;
     }
 
-    public void setDatasourceName(String datasourceName) {
-      this.datasourceName = datasourceName;
+    public void setProjectName(String projectName) {
+      this.projectName = projectName;
+    }
+
+    public String getDatasetName() {
+      return datasetName;
+    }
+
+    public void setDatasetName(String datasetName) {
+      this.datasetName = datasetName;
     }
 
     public String getStatus() {
@@ -348,12 +541,52 @@ public class AppState {
       this.status = status;
     }
 
-    public int getCapturedCount() {
-      return capturedCount;
+    public double getMap50() {
+      return map50;
     }
 
-    public void setCapturedCount(int capturedCount) {
-      this.capturedCount = capturedCount;
+    public void setMap50(double map50) {
+      this.map50 = map50;
+    }
+
+    public double getPrecisionScore() {
+      return precisionScore;
+    }
+
+    public void setPrecisionScore(double precisionScore) {
+      this.precisionScore = precisionScore;
+    }
+
+    public double getRecallScore() {
+      return recallScore;
+    }
+
+    public void setRecallScore(double recallScore) {
+      this.recallScore = recallScore;
+    }
+
+    public double getLoss() {
+      return loss;
+    }
+
+    public void setLoss(double loss) {
+      this.loss = loss;
+    }
+
+    public int getCurrentEpoch() {
+      return currentEpoch;
+    }
+
+    public void setCurrentEpoch(int currentEpoch) {
+      this.currentEpoch = currentEpoch;
+    }
+
+    public int getTotalEpochs() {
+      return totalEpochs;
+    }
+
+    public void setTotalEpochs(int totalEpochs) {
+      this.totalEpochs = totalEpochs;
     }
 
     public String getStartedAt() {
@@ -363,14 +596,84 @@ public class AppState {
     public void setStartedAt(String startedAt) {
       this.startedAt = startedAt;
     }
+
+    public String getUpdatedAt() {
+      return updatedAt;
+    }
+
+    public void setUpdatedAt(String updatedAt) {
+      this.updatedAt = updatedAt;
+    }
+
+    public String getOutputPath() {
+      return outputPath;
+    }
+
+    public void setOutputPath(String outputPath) {
+      this.outputPath = outputPath;
+    }
+
+    public String getQueueMode() {
+      return queueMode;
+    }
+
+    public void setQueueMode(String queueMode) {
+      this.queueMode = queueMode;
+    }
+
+    public String getLogPath() {
+      return logPath;
+    }
+
+    public void setLogPath(String logPath) {
+      this.logPath = logPath;
+    }
+
+    public String getWeightsPath() {
+      return weightsPath;
+    }
+
+    public void setWeightsPath(String weightsPath) {
+      this.weightsPath = weightsPath;
+    }
+
+    public String getDatasetConfigPath() {
+      return datasetConfigPath;
+    }
+
+    public void setDatasetConfigPath(String datasetConfigPath) {
+      this.datasetConfigPath = datasetConfigPath;
+    }
+
+    public String getCommandLine() {
+      return commandLine;
+    }
+
+    public void setCommandLine(String commandLine) {
+      this.commandLine = commandLine;
+    }
+
+    public String getFailureMessage() {
+      return failureMessage;
+    }
+
+    public void setFailureMessage(String failureMessage) {
+      this.failureMessage = failureMessage;
+    }
   }
 
-  public static class BotItem {
+  public static class ModelArtifact {
     private String id;
     private String name;
-    private String channel;
+    private String sourceJobId;
+    private String projectName;
+    private String yoloVersion;
     private String status;
-    private List<String> boundLibraries = new ArrayList<String>();
+    private String exportFormat;
+    private double map50;
+    private String filePath;
+    private String createdAt;
+    private String deploymentTarget;
 
     public String getId() {
       return id;
@@ -388,12 +691,28 @@ public class AppState {
       this.name = name;
     }
 
-    public String getChannel() {
-      return channel;
+    public String getSourceJobId() {
+      return sourceJobId;
     }
 
-    public void setChannel(String channel) {
-      this.channel = channel;
+    public void setSourceJobId(String sourceJobId) {
+      this.sourceJobId = sourceJobId;
+    }
+
+    public String getProjectName() {
+      return projectName;
+    }
+
+    public void setProjectName(String projectName) {
+      this.projectName = projectName;
+    }
+
+    public String getYoloVersion() {
+      return yoloVersion;
+    }
+
+    public void setYoloVersion(String yoloVersion) {
+      this.yoloVersion = yoloVersion;
     }
 
     public String getStatus() {
@@ -404,103 +723,20 @@ public class AppState {
       this.status = status;
     }
 
-    public List<String> getBoundLibraries() {
-      return boundLibraries;
+    public String getExportFormat() {
+      return exportFormat;
     }
 
-    public void setBoundLibraries(List<String> boundLibraries) {
-      this.boundLibraries = boundLibraries;
-    }
-  }
-
-  public static class ReportTemplate {
-    private String key;
-    private String label;
-    private String description;
-    private String sourceType;
-    private String updatedAt;
-    private List<ReportReference> references = new ArrayList<ReportReference>();
-
-    public String getKey() {
-      return key;
+    public void setExportFormat(String exportFormat) {
+      this.exportFormat = exportFormat;
     }
 
-    public void setKey(String key) {
-      this.key = key;
+    public double getMap50() {
+      return map50;
     }
 
-    public String getLabel() {
-      return label;
-    }
-
-    public void setLabel(String label) {
-      this.label = label;
-    }
-
-    public String getDescription() {
-      return description;
-    }
-
-    public void setDescription(String description) {
-      this.description = description;
-    }
-
-    public String getSourceType() {
-      return sourceType;
-    }
-
-    public void setSourceType(String sourceType) {
-      this.sourceType = sourceType;
-    }
-
-    public String getUpdatedAt() {
-      return updatedAt;
-    }
-
-    public void setUpdatedAt(String updatedAt) {
-      this.updatedAt = updatedAt;
-    }
-
-    public List<ReportReference> getReferences() {
-      return references;
-    }
-
-    public void setReferences(List<ReportReference> references) {
-      this.references = references;
-    }
-  }
-
-  public static class ReportReference {
-    private String id;
-    private String name;
-    private String url;
-    private String filePath;
-    private String sourceType;
-    private long size;
-    private String uploadedAt;
-
-    public String getId() {
-      return id;
-    }
-
-    public void setId(String id) {
-      this.id = id;
-    }
-
-    public String getName() {
-      return name;
-    }
-
-    public void setName(String name) {
-      this.name = name;
-    }
-
-    public String getUrl() {
-      return url;
-    }
-
-    public void setUrl(String url) {
-      this.url = url;
+    public void setMap50(double map50) {
+      this.map50 = map50;
     }
 
     public String getFilePath() {
@@ -511,36 +747,28 @@ public class AppState {
       this.filePath = filePath;
     }
 
-    public String getSourceType() {
-      return sourceType;
+    public String getCreatedAt() {
+      return createdAt;
     }
 
-    public void setSourceType(String sourceType) {
-      this.sourceType = sourceType;
+    public void setCreatedAt(String createdAt) {
+      this.createdAt = createdAt;
     }
 
-    public long getSize() {
-      return size;
+    public String getDeploymentTarget() {
+      return deploymentTarget;
     }
 
-    public void setSize(long size) {
-      this.size = size;
-    }
-
-    public String getUploadedAt() {
-      return uploadedAt;
-    }
-
-    public void setUploadedAt(String uploadedAt) {
-      this.uploadedAt = uploadedAt;
+    public void setDeploymentTarget(String deploymentTarget) {
+      this.deploymentTarget = deploymentTarget;
     }
   }
 
-  public static class OutputRecord {
+  public static class GemmaConversation {
     private String id;
-    private String title;
-    private String format;
-    private String templateLabel;
+    private String prompt;
+    private String response;
+    private String focus;
     private String createdAt;
 
     public String getId() {
@@ -551,28 +779,28 @@ public class AppState {
       this.id = id;
     }
 
-    public String getTitle() {
-      return title;
+    public String getPrompt() {
+      return prompt;
     }
 
-    public void setTitle(String title) {
-      this.title = title;
+    public void setPrompt(String prompt) {
+      this.prompt = prompt;
     }
 
-    public String getFormat() {
-      return format;
+    public String getResponse() {
+      return response;
     }
 
-    public void setFormat(String format) {
-      this.format = format;
+    public void setResponse(String response) {
+      this.response = response;
     }
 
-    public String getTemplateLabel() {
-      return templateLabel;
+    public String getFocus() {
+      return focus;
     }
 
-    public void setTemplateLabel(String templateLabel) {
-      this.templateLabel = templateLabel;
+    public void setFocus(String focus) {
+      this.focus = focus;
     }
 
     public String getCreatedAt() {

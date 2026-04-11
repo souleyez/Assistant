@@ -3,8 +3,8 @@
     <div class="brand">
       <div class="brand-mark">A</div>
       <div>
-        <div class="brand-title">Assistant</div>
-        <div class="brand-subtitle">Vue 3 + Java 8</div>
+        <div class="brand-title">Gemma 4 YOLO Studio</div>
+        <div class="brand-subtitle">Single-machine trainer</div>
       </div>
     </div>
 
@@ -19,9 +19,11 @@
 
 <script setup>
 const items = [
-  { to: '/', label: '工作台', caption: 'Overview' },
-  { to: '/documents', label: '文档中心', caption: 'Libraries & files' },
-  { to: '/datasources', label: '数据源', caption: 'Managed captures' },
-  { to: '/reports', label: '报表中心', caption: 'Templates & outputs' },
+  { to: '/', label: '总览', caption: 'Machine & progress' },
+  { to: '/datasets', label: '数据集', caption: 'YOLO corpora' },
+  { to: '/projects', label: '训练项目', caption: 'Experiment specs' },
+  { to: '/jobs', label: '训练任务', caption: 'Run queue' },
+  { to: '/models', label: '模型仓库', caption: 'Artifacts' },
+  { to: '/gemma', label: 'Gemma 助手', caption: 'Advisor' },
 ]
 </script>
