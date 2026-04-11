@@ -1,4 +1,16 @@
-const API_BASE = import.meta.env.VITE_API_BASE || 'http://127.0.0.1:8080'
+function resolveApiBase() {
+  if (import.meta.env.VITE_API_BASE) {
+    return import.meta.env.VITE_API_BASE
+  }
+
+  if (typeof window !== 'undefined' && window.location?.hostname) {
+    return `${window.location.protocol}//${window.location.hostname}:8080`
+  }
+
+  return 'http://127.0.0.1:8080'
+}
+
+const API_BASE = resolveApiBase()
 
 async function request(path, options = {}) {
   const response = await fetch(`${API_BASE}${path}`, {
