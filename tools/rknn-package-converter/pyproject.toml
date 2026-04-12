@@ -9,6 +9,9 @@ description = "Standalone converter for packaging trained RKNN algorithms into v
 requires-python = ">=3.9"
 dependencies = []
 
+[project.scripts]
+rknn-package-converter = "rknn_package_converter.cli:main"
+
 [tool.setuptools]
 package-dir = {"" = "src"}
 

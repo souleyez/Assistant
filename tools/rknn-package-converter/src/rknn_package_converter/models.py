@@ -49,36 +49,34 @@ class Manifest:
     @classmethod
     def from_file(cls, manifest_path: Path) -> "Manifest":
         raw = json.loads(manifest_path.read_text(encoding="utf-8"))
+        return cls.from_dict(raw, manifest_path.resolve(), manifest_path.parent.resolve())
 
-        template_path = (manifest_path.parent / raw["template_path"]).resolve()
-        output_dir = (manifest_path.parent / raw["output_dir"]).resolve()
-        output_archive = raw.get("output_archive")
-        output_archive_path = ((manifest_path.parent / output_archive).resolve()
-                               if output_archive else None)
-
-        nn_server_source_path = raw.get("nn_server_source_path")
-        nn_server_path = ((manifest_path.parent / nn_server_source_path).resolve()
-                          if nn_server_source_path else None)
-
+    @classmethod
+    def from_dict(
+        cls,
+        raw: Dict[str, Any],
+        manifest_path: Path,
+        base_dir: Path,
+    ) -> "Manifest":
         model = raw["model"]
         classes = [ClassSpec(**item) for item in raw["classes"]]
 
         return cls(
-            manifest_path=manifest_path.resolve(),
-            template_path=template_path,
-            output_dir=output_dir,
-            output_archive=output_archive_path,
+            manifest_path=manifest_path,
+            template_path=_resolve_path(base_dir, raw["template_path"]),
+            output_dir=_resolve_path(base_dir, raw["output_dir"]),
+            output_archive=_resolve_optional_path(base_dir, raw.get("output_archive")),
             package_name=raw["package_name"],
             variant=raw["variant"],
             engine=EngineSpec(**raw["engine"]),
             model=ModelSpec(
-                source_path=(manifest_path.parent / model["source_path"]).resolve(),
+                source_path=_resolve_path(base_dir, model["source_path"]),
                 package_path=model["package_path"],
                 framework=model["framework"],
             ),
             classes=classes,
             conf_thresh=raw.get("conf_thresh"),
-            nn_server_source_path=nn_server_path,
+            nn_server_source_path=_resolve_optional_path(base_dir, raw.get("nn_server_source_path")),
             json_overrides=raw.get("json_overrides", {}),
         )
 
@@ -97,3 +95,16 @@ class Manifest:
             raise ValueError(f"Unsupported framework: {self.model.framework}")
         if not self.classes:
             raise ValueError("At least one class must be configured")
+
+
+def _resolve_path(base_dir: Path, value: str) -> Path:
+    path = Path(value)
+    if not path.is_absolute():
+        path = base_dir / path
+    return path.resolve()
+
+
+def _resolve_optional_path(base_dir: Path, value: Optional[str]) -> Optional[Path]:
+    if not value:
+        return None
+    return _resolve_path(base_dir, value)

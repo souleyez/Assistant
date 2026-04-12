@@ -95,3 +95,28 @@ Ship the tool with:
   - RKNN model placement
   - zip creation
   - optional `nn_server` replacement
+
+## Service Extension
+
+To make the converter usable on the 10 server without wiring it into the training platform, the tool also exposes:
+
+- a pure Python standalone web form on its own port
+- its own runtime and logs directory under `tools/rknn-package-converter`
+- optional Gemma 4 review through a local Ollama endpoint
+- its own Linux start, stop, status, and cron install scripts
+
+The web service only writes into its own runtime directory and only serves artifacts produced inside that directory.
+
+## Gemma Review
+
+Gemma review is advisory, not blocking.
+
+- package conversion must succeed even if Ollama is offline
+- review output is written to `gemma-review.json`
+- prompts are constrained to the Tencent document rules:
+  - `base.json` checks
+  - `nn.json` checks
+  - YOLOv5 type `6`
+  - YOLOv8 type `8`
+  - `nn.extend.json` checks
+  - `m31` `nn_server` note when applicable
