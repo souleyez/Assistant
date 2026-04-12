@@ -5,6 +5,7 @@ import sys
 
 ROOT = Path(__file__).resolve().parent / "dist"
 PORT = int(sys.argv[1]) if len(sys.argv) > 1 else 4173
+HOST = sys.argv[2] if len(sys.argv) > 2 else os.environ.get("SPA_HOST", "0.0.0.0")
 
 
 class SpaHandler(SimpleHTTPRequestHandler):
@@ -29,6 +30,6 @@ class SpaHandler(SimpleHTTPRequestHandler):
 
 if __name__ == "__main__":
     os.chdir(ROOT)
-    server = ThreadingHTTPServer(("0.0.0.0", PORT), SpaHandler)
-    print(f"Serving {ROOT} on 0.0.0.0:{PORT}", flush=True)
+    server = ThreadingHTTPServer((HOST, PORT), SpaHandler)
+    print(f"Serving {ROOT} on {HOST}:{PORT}", flush=True)
     server.serve_forever()

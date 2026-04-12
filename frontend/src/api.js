@@ -3,11 +3,11 @@ function resolveApiBase() {
     return import.meta.env.VITE_API_BASE
   }
 
-  if (typeof window !== 'undefined' && window.location?.hostname) {
-    return `${window.location.protocol}//${window.location.hostname}:8080`
+  if (typeof window !== 'undefined' && window.location?.origin) {
+    return `${window.location.origin}/assistant-api`
   }
 
-  return 'http://127.0.0.1:8080'
+  return 'http://127.0.0.1/assistant-api'
 }
 
 const API_BASE = resolveApiBase()

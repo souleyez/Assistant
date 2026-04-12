@@ -8,7 +8,7 @@ import ModelsPage from './views/ModelsPage.vue'
 import GemmaPage from './views/GemmaPage.vue'
 
 const router = createRouter({
-  history: createWebHistory(),
+  history: createWebHistory(import.meta.env.BASE_URL),
   routes: [
     { path: '/', name: 'quick-start', component: QuickStartPage },
     { path: '/overview', name: 'overview', component: OverviewPage },
