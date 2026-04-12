@@ -19,7 +19,8 @@
 
 <script setup>
 const items = [
-  { to: '/', label: '总览', caption: 'Machine & progress' },
+  { to: '/', label: '一键开训', caption: 'Upload & prompt' },
+  { to: '/overview', label: '总览', caption: 'Machine & progress' },
   { to: '/datasets', label: '数据集', caption: 'YOLO corpora' },
   { to: '/projects', label: '训练项目', caption: 'Experiment specs' },
   { to: '/jobs', label: '训练任务', caption: 'Run queue' },

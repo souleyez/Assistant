@@ -10,6 +10,7 @@ public class AppState {
   private List<TrainingJob> jobs = new ArrayList<TrainingJob>();
   private List<ModelArtifact> models = new ArrayList<ModelArtifact>();
   private List<GemmaConversation> gemmaConversations = new ArrayList<GemmaConversation>();
+  private List<QuickStartSession> quickStarts = new ArrayList<QuickStartSession>();
   private List<TimelineEntry> timeline = new ArrayList<TimelineEntry>();
 
   public PlatformState getPlatform() {
@@ -58,6 +59,14 @@ public class AppState {
 
   public void setGemmaConversations(List<GemmaConversation> gemmaConversations) {
     this.gemmaConversations = gemmaConversations;
+  }
+
+  public List<QuickStartSession> getQuickStarts() {
+    return quickStarts;
+  }
+
+  public void setQuickStarts(List<QuickStartSession> quickStarts) {
+    this.quickStarts = quickStarts;
   }
 
   public List<TimelineEntry> getTimeline() {
@@ -801,6 +810,180 @@ public class AppState {
 
     public void setFocus(String focus) {
       this.focus = focus;
+    }
+
+    public String getCreatedAt() {
+      return createdAt;
+    }
+
+    public void setCreatedAt(String createdAt) {
+      this.createdAt = createdAt;
+    }
+  }
+
+  public static class QuickStartSession {
+    private String id;
+    private String targetDescription;
+    private String datasetId;
+    private String datasetName;
+    private String projectId;
+    private String projectName;
+    private String jobId;
+    private String uploadPath;
+    private int imageCount;
+    private int labeledImageCount;
+    private boolean readyForTraining;
+    private boolean autoStarted;
+    private String status;
+    private String objective;
+    private String warning;
+    private String nextAction;
+    private String gemmaSummary;
+    private List<String> suggestedClasses = new ArrayList<String>();
+    private String createdAt;
+
+    public String getId() {
+      return id;
+    }
+
+    public void setId(String id) {
+      this.id = id;
+    }
+
+    public String getTargetDescription() {
+      return targetDescription;
+    }
+
+    public void setTargetDescription(String targetDescription) {
+      this.targetDescription = targetDescription;
+    }
+
+    public String getDatasetId() {
+      return datasetId;
+    }
+
+    public void setDatasetId(String datasetId) {
+      this.datasetId = datasetId;
+    }
+
+    public String getDatasetName() {
+      return datasetName;
+    }
+
+    public void setDatasetName(String datasetName) {
+      this.datasetName = datasetName;
+    }
+
+    public String getProjectId() {
+      return projectId;
+    }
+
+    public void setProjectId(String projectId) {
+      this.projectId = projectId;
+    }
+
+    public String getProjectName() {
+      return projectName;
+    }
+
+    public void setProjectName(String projectName) {
+      this.projectName = projectName;
+    }
+
+    public String getJobId() {
+      return jobId;
+    }
+
+    public void setJobId(String jobId) {
+      this.jobId = jobId;
+    }
+
+    public String getUploadPath() {
+      return uploadPath;
+    }
+
+    public void setUploadPath(String uploadPath) {
+      this.uploadPath = uploadPath;
+    }
+
+    public int getImageCount() {
+      return imageCount;
+    }
+
+    public void setImageCount(int imageCount) {
+      this.imageCount = imageCount;
+    }
+
+    public int getLabeledImageCount() {
+      return labeledImageCount;
+    }
+
+    public void setLabeledImageCount(int labeledImageCount) {
+      this.labeledImageCount = labeledImageCount;
+    }
+
+    public boolean isReadyForTraining() {
+      return readyForTraining;
+    }
+
+    public void setReadyForTraining(boolean readyForTraining) {
+      this.readyForTraining = readyForTraining;
+    }
+
+    public boolean isAutoStarted() {
+      return autoStarted;
+    }
+
+    public void setAutoStarted(boolean autoStarted) {
+      this.autoStarted = autoStarted;
+    }
+
+    public String getStatus() {
+      return status;
+    }
+
+    public void setStatus(String status) {
+      this.status = status;
+    }
+
+    public String getObjective() {
+      return objective;
+    }
+
+    public void setObjective(String objective) {
+      this.objective = objective;
+    }
+
+    public String getWarning() {
+      return warning;
+    }
+
+    public void setWarning(String warning) {
+      this.warning = warning;
+    }
+
+    public String getNextAction() {
+      return nextAction;
+    }
+
+    public void setNextAction(String nextAction) {
+      this.nextAction = nextAction;
+    }
+
+    public String getGemmaSummary() {
+      return gemmaSummary;
+    }
+
+    public void setGemmaSummary(String gemmaSummary) {
+      this.gemmaSummary = gemmaSummary;
+    }
+
+    public List<String> getSuggestedClasses() {
+      return suggestedClasses;
+    }
+
+    public void setSuggestedClasses(List<String> suggestedClasses) {
+      this.suggestedClasses = suggestedClasses;
     }
 
     public String getCreatedAt() {

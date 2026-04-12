@@ -185,6 +185,13 @@ select {
   padding: 24px;
 }
 
+.panel-flat {
+  padding: 0;
+  background: rgba(255, 255, 255, 0.5);
+  border-radius: 18px;
+  box-shadow: none;
+}
+
 .hero-panel {
   min-height: 220px;
   background:
@@ -381,6 +388,77 @@ select {
   font-family: Consolas, "Courier New", monospace;
   line-height: 1.6;
   color: #233247;
+}
+
+.quickstart-grid {
+  grid-template-columns: minmax(0, 1.3fr) minmax(320px, 0.7fr);
+}
+
+.quickstart-form-panel {
+  background:
+    radial-gradient(circle at top right, rgba(15, 118, 110, 0.1), transparent 34%),
+    rgba(255, 255, 255, 0.78);
+}
+
+.quickstart-form {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+.quickstart-label {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  font-weight: 700;
+}
+
+.quickstart-toggle {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  color: #233247;
+}
+
+.upload-summary {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 14px;
+  border-radius: 18px;
+  background: rgba(15, 118, 110, 0.08);
+}
+
+.sample-file-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.sample-file-chip {
+  padding: 8px 12px;
+  border-radius: 999px;
+  background: rgba(18, 32, 51, 0.08);
+  color: #233247;
+  font-size: 0.88rem;
+}
+
+.quickstart-result-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+.quickstart-result-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 20px;
+  align-items: flex-start;
+}
+
+.note-panel {
+  padding: 18px 20px;
+  background: rgba(255, 244, 220, 0.66);
 }
 
 @media (max-width: 1080px) {

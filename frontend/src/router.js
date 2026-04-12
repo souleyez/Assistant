@@ -1,4 +1,5 @@
 import { createRouter, createWebHistory } from 'vue-router'
+import QuickStartPage from './views/QuickStartPage.vue'
 import OverviewPage from './views/OverviewPage.vue'
 import DatasetsPage from './views/DatasetsPage.vue'
 import ProjectsPage from './views/ProjectsPage.vue'
@@ -9,7 +10,8 @@ import GemmaPage from './views/GemmaPage.vue'
 const router = createRouter({
   history: createWebHistory(),
   routes: [
-    { path: '/', name: 'overview', component: OverviewPage },
+    { path: '/', name: 'quick-start', component: QuickStartPage },
+    { path: '/overview', name: 'overview', component: OverviewPage },
     { path: '/datasets', name: 'datasets', component: DatasetsPage },
     { path: '/projects', name: 'projects', component: ProjectsPage },
     { path: '/jobs', name: 'jobs', component: JobsPage },

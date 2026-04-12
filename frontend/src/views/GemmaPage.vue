@@ -31,6 +31,8 @@
           <span class="chip">hyper-params</span>
           <span class="chip">deployment export</span>
           <span class="chip">single-machine workflow</span>
+          <span class="chip">{{ runtime.model || 'Gemma fallback' }}</span>
+          <span class="chip">{{ runtime.ready ? 'ollama ready' : 'fallback mode' }}</span>
         </div>
       </article>
     </section>
@@ -67,6 +69,10 @@ const focus = ref('training')
 const submitting = ref(false)
 const message = ref('')
 const error = ref('')
+const runtime = ref({
+  ready: false,
+  model: '',
+})
 
 function formatTime(value) {
   return new Intl.DateTimeFormat('zh-CN', {
@@ -80,6 +86,7 @@ function formatTime(value) {
 async function loadGemma() {
   const response = await request('/api/gemma-assistant')
   items.value = response.items
+  runtime.value = response.runtime || runtime.value
 }
 
 async function askGemma() {

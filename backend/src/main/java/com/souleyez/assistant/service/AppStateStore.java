@@ -37,6 +37,9 @@ public class AppStateStore {
     Files.createDirectories(studioRoot);
     if (Files.exists(stateFile)) {
       state = objectMapper.readValue(stateFile.toFile(), AppState.class);
+      if (state.getQuickStarts() == null) {
+        state.setQuickStarts(new ArrayList<AppState.QuickStartSession>());
+      }
       return;
     }
     state = seedState();
@@ -45,6 +48,13 @@ public class AppStateStore {
 
   public synchronized AppState snapshot() {
     return state;
+  }
+
+  public synchronized AppState.QuickStartSession recordQuickStart(AppState.QuickStartSession session) throws IOException {
+    state.getQuickStarts().add(0, session);
+    addTimeline("一键开训已生成", session.getProjectName() + " 已根据上传图片和目标描述生成。");
+    save();
+    return session;
   }
 
   public synchronized void save() throws IOException {
@@ -236,7 +246,7 @@ public class AppStateStore {
     return artifact;
   }
 
-  public synchronized AppState.GemmaConversation askGemma(String prompt, String focus) throws IOException {
+  public synchronized AppState.GemmaConversation askGemma(String response, String prompt, String focus) throws IOException {
     if (!StringUtils.hasText(prompt)) {
       throw new IllegalArgumentException("Gemma 提问不能为空");
     }
@@ -244,7 +254,7 @@ public class AppStateStore {
     conversation.setId("gemma-" + shortId());
     conversation.setPrompt(prompt);
     conversation.setFocus(defaultText(focus, "training"));
-    conversation.setResponse(buildGemmaResponse(prompt, focus));
+    conversation.setResponse(defaultText(response, buildGemmaResponse(prompt, focus)));
     conversation.setCreatedAt(now());
     state.getGemmaConversations().add(0, conversation);
     addTimeline("Gemma 4 建议已生成", conversation.getFocus() + " 方向建议已写入工作台。");
@@ -309,13 +319,7 @@ public class AppStateStore {
     project.setUpdatedAt(now());
     state.getPlatform().getRuntime().setTrainingBusy(true);
 
-    List<String> command = Arrays.asList(
-        "powershell",
-        "-ExecutionPolicy",
-        "Bypass",
-        "-File",
-        job.getCommandLine()
-    );
+    List<String> command = buildLaunchCommand(job.getCommandLine());
 
     ProcessBuilder builder = new ProcessBuilder(command);
     builder.directory(studioRoot.toFile());
@@ -433,14 +437,14 @@ public class AppStateStore {
     Files.createDirectories(scriptsDir);
 
     Path datasetConfig = manifestDir.resolve("dataset.yaml");
-    Path launchScript = scriptsDir.resolve("train-yolo.ps1");
+    Path launchScript = scriptsDir.resolve(isWindows() ? "train-yolo.ps1" : "train-yolo.sh");
     Path pythonScript = scriptsDir.resolve("train_yolo_job.py");
     Path logPath = logsDir.resolve("train.log");
     Path realWeightsDir = jobRoot.resolve(Paths.get("artifacts", "weights"));
 
     writeDatasetConfig(dataset, datasetConfig);
     writePythonLauncher(project, datasetConfig, jobRoot, pythonScript);
-    writePowerShellLauncher(pythonScript, launchScript);
+    writeLauncher(pythonScript, launchScript);
 
     job.setOutputPath(jobRoot.toString());
     job.setLogPath(logPath.toString());
@@ -493,15 +497,28 @@ public class AppStateStore {
     Files.write(pythonScript, lines);
   }
 
-  private void writePowerShellLauncher(Path pythonScript, Path launchScript) throws IOException {
-    String defaultPython = defaultText(state.getPlatform().getRuntime().getPythonCommand(), "python");
-    List<String> lines = Arrays.asList(
-        "$ErrorActionPreference = 'Stop'",
-        "$python = $env:YOLO_PYTHON",
-        "if ([string]::IsNullOrWhiteSpace($python)) { $python = '" + defaultPython.replace("'", "''") + "' }",
-        "& $python '" + pythonScript.toString().replace("'", "''") + "'"
-    );
+  private void writeLauncher(Path pythonScript, Path launchScript) throws IOException {
+    String defaultPython = resolvePythonCommand();
+    List<String> lines;
+    if (isWindows()) {
+      lines = Arrays.asList(
+          "$ErrorActionPreference = 'Stop'",
+          "$python = $env:YOLO_PYTHON",
+          "if ([string]::IsNullOrWhiteSpace($python)) { $python = '" + defaultPython.replace("'", "''") + "' }",
+          "& $python '" + pythonScript.toString().replace("'", "''") + "'"
+      );
+    } else {
+      lines = Arrays.asList(
+          "#!/usr/bin/env bash",
+          "set -euo pipefail",
+          "python_cmd=\"${YOLO_PYTHON:-" + escapeForDoubleQuotes(defaultPython) + "}\"",
+          "\"$python_cmd\" \"" + escapeForDoubleQuotes(pythonScript.toString()) + "\""
+      );
+    }
     Files.write(launchScript, lines);
+    if (!isWindows()) {
+      launchScript.toFile().setExecutable(true);
+    }
   }
 
   private void enrichMetricsFromRun(AppState.TrainingJob job) throws IOException {
@@ -612,7 +629,7 @@ public class AppStateStore {
     runtime.setGemmaModel("Gemma 4 local advisor");
     runtime.setYoloEngine("Ultralytics YOLO");
     runtime.setPythonEnv("conda://gemma4-yolo");
-    runtime.setPythonCommand("python");
+    runtime.setPythonCommand(resolvePythonCommand());
     runtime.setTrainingWorkspace(studioRoot.toString());
     runtime.setDefaultBaseModel("yolo11m.pt");
     runtime.setGemmaReady(false);
@@ -718,6 +735,7 @@ public class AppStateStore {
     conversation.setFocus("dataset");
     conversation.setCreatedAt(now());
     appState.setGemmaConversations(new ArrayList<AppState.GemmaConversation>(Collections.singletonList(conversation)));
+    appState.setQuickStarts(new ArrayList<AppState.QuickStartSession>());
 
     appState.setTimeline(new ArrayList<AppState.TimelineEntry>());
     addSeedTimeline(appState, "训练平台初始化", "Gemma 4 + YOLO 单机训练平台骨架已建立。");
@@ -754,5 +772,48 @@ public class AppStateStore {
     }
     dataset.setClassNames(classNames);
     return dataset;
+  }
+
+  private String resolvePythonCommand() {
+    String configured = state != null && state.getPlatform() != null && state.getPlatform().getRuntime() != null
+        ? state.getPlatform().getRuntime().getPythonCommand()
+        : null;
+    if (StringUtils.hasText(configured) && !"python".equals(configured)) {
+      return configured;
+    }
+    String envPython = System.getenv("YOLO_PYTHON");
+    if (StringUtils.hasText(envPython)) {
+      return envPython;
+    }
+    Path linuxVenv = Paths.get(".venv", "bin", "python");
+    if (Files.exists(linuxVenv)) {
+      return linuxVenv.toString();
+    }
+    Path windowsVenv = Paths.get(".venv", "Scripts", "python.exe");
+    if (Files.exists(windowsVenv)) {
+      return windowsVenv.toString();
+    }
+    return "python";
+  }
+
+  private List<String> buildLaunchCommand(String scriptPath) {
+    if (isWindows()) {
+      return Arrays.asList(
+          "powershell",
+          "-ExecutionPolicy",
+          "Bypass",
+          "-File",
+          scriptPath
+      );
+    }
+    return Arrays.asList("/bin/bash", scriptPath);
+  }
+
+  private boolean isWindows() {
+    return System.getProperty("os.name", "").toLowerCase().contains("win");
+  }
+
+  private String escapeForDoubleQuotes(String value) {
+    return value.replace("\\", "\\\\").replace("\"", "\\\"");
   }
 }
