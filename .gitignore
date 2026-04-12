@@ -3,6 +3,9 @@ frontend/dist/
 backend/target/
 backend/.mvn/wrapper/maven-wrapper.jar
 backend/data/runtime/
+.venv/
+.runtime/
+logs/
 *.log
 .DS_Store
 Thumbs.db

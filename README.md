@@ -27,6 +27,7 @@
 ```text
 frontend/  Vue 3 单页应用
 backend/   Spring Boot API
+deploy/    Linux 单机部署脚本
 ```
 
 ## 本地启动
@@ -93,3 +94,33 @@ $env:YOLO_PYTHON = 'D:\miniconda3\envs\gemma4-yolo\python.exe'
 - PowerShell 启动脚本
 - Python 训练脚本
 - `train.log`
+
+## Linux 单机部署
+
+如果你要在 Linux 服务器上长期跑这个平台，直接用仓库里的脚本：
+
+```bash
+cd /home/xigma01/apps/Assistant
+bash deploy/linux/setup-server.sh
+```
+
+这套脚本会做这些事情：
+
+- 在项目根目录创建 `.venv`，并安装 `ultralytics`
+- 构建前端 `dist`
+- 打包后端 jar
+- 以用户态后台进程启动前后端
+- 安装 `crontab @reboot`，服务器重启后自动拉起
+
+常用运维命令：
+
+```bash
+bash deploy/linux/status.sh
+bash deploy/linux/restart.sh
+bash deploy/linux/stop.sh
+```
+
+默认端口：
+
+- 前端：`4173`
+- 后端：`8080`
