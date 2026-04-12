@@ -33,8 +33,10 @@
               <th>项目</th>
               <th>版本</th>
               <th>指标</th>
+              <th>RKNN</th>
               <th>算法包</th>
               <th>路径</th>
+              <th>操作</th>
             </tr>
           </thead>
           <tbody>
@@ -47,12 +49,34 @@
               <td>{{ item.yoloVersion }}</td>
               <td>mAP50 {{ item.map50 }}</td>
               <td>
+                <div class="table-subtle">{{ item.targetChip || '未指定芯片' }} · {{ item.rknnStatus || 'n/a' }}</div>
+                <div class="table-subtle">{{ item.rknnMessage || '训练完成后可由操作员填写芯片并执行转换。' }}</div>
+              </td>
+              <td>
                 <div class="table-subtle">{{ item.packageVariant || 'm1' }} · {{ item.packageStatus || 'n/a' }}</div>
                 <div class="table-subtle">{{ item.packageMessage || '训练完成后会尝试自动打包。' }}</div>
               </td>
               <td>
                 <div class="table-subtle">model {{ item.filePath }}</div>
+                <div class="table-subtle">rknn {{ item.rknnPath || '-' }}</div>
                 <div class="table-subtle">package {{ item.packageArchivePath || item.packageDir || '-' }}</div>
+              </td>
+              <td>
+                <div class="inline-actions">
+                  <input
+                    v-model.trim="targetChips[item.id]"
+                    class="input"
+                    placeholder="rk3588 / rk3568 / rv1106"
+                    :disabled="!canConvert(item)"
+                  />
+                  <button
+                    class="button button-secondary"
+                    :disabled="submitting || !targetChips[item.id] || !canConvert(item)"
+                    @click="convertToRknn(item.id)"
+                  >
+                    转 RKNN
+                  </button>
+                </div>
               </td>
             </tr>
           </tbody>
@@ -76,6 +100,7 @@ const items = ref([])
 const message = ref('')
 const error = ref('')
 const submitting = ref(false)
+const targetChips = ref({})
 const form = ref({
   name: '',
   projectName: '',
@@ -88,6 +113,11 @@ const form = ref({
 async function loadModels() {
   const response = await request('/api/models')
   items.value = response.items
+  const next = {}
+  for (const item of items.value) {
+    next[item.id] = targetChips.value[item.id] || item.targetChip || ''
+  }
+  targetChips.value = next
 }
 
 async function registerModel() {
@@ -114,6 +144,28 @@ async function registerModel() {
   } finally {
     submitting.value = false
   }
+}
+
+async function convertToRknn(id) {
+  submitting.value = true
+  message.value = ''
+  error.value = ''
+  try {
+    await request(`/api/models/${id}/convert-rknn`, {
+      method: 'POST',
+      body: JSON.stringify({ targetChip: targetChips.value[id] }),
+    })
+    await loadModels()
+    message.value = 'RKNN 转换与默认算法包生成已提交。'
+  } catch (err) {
+    error.value = err instanceof Error ? err.message : 'RKNN 转换失败'
+  } finally {
+    submitting.value = false
+  }
+}
+
+function canConvert(item) {
+  return Boolean(item?.sourceJobId && item.sourceJobId.startsWith('job-') && item.rknnStatus !== 'legacy')
 }
 
 onMounted(loadModels)

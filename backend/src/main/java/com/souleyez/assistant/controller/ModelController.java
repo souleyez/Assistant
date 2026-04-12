@@ -5,12 +5,17 @@ import com.souleyez.assistant.service.AppStateStore;
 import java.io.IOException;
 import java.util.Collections;
 import java.util.Map;
+import javax.validation.Valid;
+import javax.validation.constraints.NotBlank;
+import org.springframework.validation.annotation.Validated;
+import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
+@Validated
 @RestController
 @RequestMapping("/api/models")
 public class ModelController {
@@ -28,5 +33,24 @@ public class ModelController {
   @PostMapping
   public Map<String, Object> register(@RequestBody AppState.ModelArtifact request) throws IOException {
     return Collections.<String, Object>singletonMap("item", store.registerModel(request));
+  }
+
+  @PostMapping("/{id}/convert-rknn")
+  public Map<String, Object> convertToRknn(@PathVariable String id,
+                                           @Valid @RequestBody ConvertRknnRequest request) throws IOException {
+    return Collections.<String, Object>singletonMap("item", store.convertModelToRknn(id, request.getTargetChip()));
+  }
+
+  public static class ConvertRknnRequest {
+    @NotBlank
+    private String targetChip;
+
+    public String getTargetChip() {
+      return targetChip;
+    }
+
+    public void setTargetChip(String targetChip) {
+      this.targetChip = targetChip;
+    }
   }
 }

@@ -683,6 +683,10 @@ public class AppState {
     private String filePath;
     private String sourceModelPath;
     private String sourceModelFormat;
+    private String targetChip;
+    private String rknnStatus;
+    private String rknnMessage;
+    private String rknnPath;
     private String createdAt;
     private String deploymentTarget;
     private String packageVariant;
@@ -778,6 +782,38 @@ public class AppState {
 
     public void setSourceModelFormat(String sourceModelFormat) {
       this.sourceModelFormat = sourceModelFormat;
+    }
+
+    public String getTargetChip() {
+      return targetChip;
+    }
+
+    public void setTargetChip(String targetChip) {
+      this.targetChip = targetChip;
+    }
+
+    public String getRknnStatus() {
+      return rknnStatus;
+    }
+
+    public void setRknnStatus(String rknnStatus) {
+      this.rknnStatus = rknnStatus;
+    }
+
+    public String getRknnMessage() {
+      return rknnMessage;
+    }
+
+    public void setRknnMessage(String rknnMessage) {
+      this.rknnMessage = rknnMessage;
+    }
+
+    public String getRknnPath() {
+      return rknnPath;
+    }
+
+    public void setRknnPath(String rknnPath) {
+      this.rknnPath = rknnPath;
     }
 
     public String getCreatedAt() {

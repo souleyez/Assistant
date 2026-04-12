@@ -52,6 +52,9 @@ public class AppStateStore {
         if (!StringUtils.hasText(item.getSourceModelFormat())) {
           item.setSourceModelFormat(item.getExportFormat());
         }
+        if (!StringUtils.hasText(item.getRknnStatus())) {
+          item.setRknnStatus("legacy");
+        }
         if (!StringUtils.hasText(item.getPackageVariant())) {
           item.setPackageVariant("m1");
         }
@@ -259,6 +262,10 @@ public class AppStateStore {
     artifact.setFilePath(defaultText(incoming.getFilePath(), "models/" + artifact.getName() + ".onnx"));
     artifact.setSourceModelPath(defaultText(incoming.getSourceModelPath(), artifact.getFilePath()));
     artifact.setSourceModelFormat(defaultText(incoming.getSourceModelFormat(), artifact.getExportFormat()));
+    artifact.setTargetChip(incoming.getTargetChip());
+    artifact.setRknnStatus(defaultText(incoming.getRknnStatus(), "manual"));
+    artifact.setRknnMessage(incoming.getRknnMessage());
+    artifact.setRknnPath(incoming.getRknnPath());
     artifact.setCreatedAt(now());
     artifact.setDeploymentTarget(defaultText(incoming.getDeploymentTarget(), "local-edge"));
     artifact.setPackageVariant(defaultText(incoming.getPackageVariant(), "m1"));
@@ -271,6 +278,36 @@ public class AppStateStore {
     addTimeline("登记模型", artifact.getName() + " 已加入模型仓库。");
     save();
     return artifact;
+  }
+
+  public synchronized AppState.ModelArtifact convertModelToRknn(String modelId, String targetChip) throws IOException {
+    AppState.ModelArtifact model = requireModel(modelId);
+    if (!StringUtils.hasText(model.getSourceJobId()) || "manual".equals(model.getSourceJobId())) {
+      throw new IllegalArgumentException("当前只支持对训练任务产出的模型执行一键 RKNN 转换。");
+    }
+    AppState.TrainingJob job;
+    AppState.TrainingProject project;
+    AppState.Dataset dataset;
+    try {
+      job = requireJob(model.getSourceJobId());
+      project = requireProject(job.getProjectId());
+      dataset = requireDataset(project.getDatasetId());
+    } catch (IllegalArgumentException exception) {
+      throw new IllegalArgumentException("当前只支持对仍关联训练任务的数据模型执行 RKNN 转换。");
+    }
+    model.setRknnStatus("running");
+    model.setRknnMessage("正在按 " + targetChip + " 转换 RKNN。");
+    modelPackagingService.convertModelToRknnAndPackage(
+        model,
+        project,
+        dataset,
+        job,
+        resolvePythonCommand(),
+        targetChip
+    );
+    addTimeline("模型转换已执行", model.getName() + " 已按 " + targetChip + " 执行 RKNN 转换。");
+    save();
+    return model;
   }
 
   public synchronized AppState.GemmaConversation askGemma(String response, String prompt, String focus) throws IOException {
@@ -327,6 +364,15 @@ public class AppStateStore {
       }
     }
     throw new IllegalArgumentException("训练任务不存在");
+  }
+
+  private AppState.ModelArtifact requireModel(String modelId) {
+    for (AppState.ModelArtifact item : state.getModels()) {
+      if (modelId.equals(item.getId())) {
+        return item;
+      }
+    }
+    throw new IllegalArgumentException("模型不存在");
   }
 
   private void addTimeline(String title, String description) {
@@ -421,6 +467,9 @@ public class AppStateStore {
     model.setFilePath(Paths.get(job.getWeightsPath(), "best.pt").toString());
     model.setSourceModelPath(model.getFilePath());
     model.setSourceModelFormat("pt");
+    model.setRknnStatus("pending");
+    model.setRknnMessage("当前训练产物为 PT；如需 Rockchip 交付，请填写目标芯片后执行 RKNN 转换。");
+    model.setRknnPath(null);
     model.setCreatedAt(now());
     model.setDeploymentTarget("local-edge");
     model.setPackageVariant("m1");
@@ -761,6 +810,9 @@ public class AppStateStore {
     model.setFilePath("models/helmet-guard-best-2026-04.onnx");
     model.setSourceModelPath("models/helmet-guard-best-2026-04.onnx");
     model.setSourceModelFormat("onnx");
+    model.setRknnStatus("legacy");
+    model.setRknnMessage("历史样例模型，尚未做 RKNN 转换。");
+    model.setRknnPath(null);
     model.setCreatedAt(now());
     model.setDeploymentTarget("factory-gate-cam");
     model.setPackageVariant("m1");
