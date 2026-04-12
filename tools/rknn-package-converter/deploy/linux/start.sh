@@ -40,4 +40,13 @@ fi
   echo $! >"$WEB_PID_FILE"
 )
 
+if command -v curl >/dev/null 2>&1; then
+  for _ in $(seq 1 20); do
+    if curl -fsS "http://127.0.0.1:$WEB_PORT/health" >/dev/null 2>&1; then
+      break
+    fi
+    sleep 1
+  done
+fi
+
 echo "Started RKNN converter web service on port $WEB_PORT"
