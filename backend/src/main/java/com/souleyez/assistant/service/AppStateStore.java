@@ -55,6 +55,9 @@ public class AppStateStore {
         if (!StringUtils.hasText(item.getRknnStatus())) {
           item.setRknnStatus("legacy");
         }
+        if (!StringUtils.hasText(item.getRknnMessage())) {
+          item.setRknnMessage(defaultRknnMessage(item.getSourceModelFormat()));
+        }
         if (!StringUtils.hasText(item.getPackageVariant())) {
           item.setPackageVariant("m1");
         }
@@ -264,7 +267,7 @@ public class AppStateStore {
     artifact.setSourceModelFormat(defaultText(incoming.getSourceModelFormat(), artifact.getExportFormat()));
     artifact.setTargetChip(incoming.getTargetChip());
     artifact.setRknnStatus(defaultText(incoming.getRknnStatus(), "manual"));
-    artifact.setRknnMessage(incoming.getRknnMessage());
+    artifact.setRknnMessage(defaultText(incoming.getRknnMessage(), defaultRknnMessage(artifact.getSourceModelFormat())));
     artifact.setRknnPath(incoming.getRknnPath());
     artifact.setCreatedAt(now());
     artifact.setDeploymentTarget(defaultText(incoming.getDeploymentTarget(), "local-edge"));
@@ -282,18 +285,19 @@ public class AppStateStore {
 
   public synchronized AppState.ModelArtifact convertModelToRknn(String modelId, String targetChip) throws IOException {
     AppState.ModelArtifact model = requireModel(modelId);
-    if (!StringUtils.hasText(model.getSourceJobId()) || "manual".equals(model.getSourceJobId())) {
-      throw new IllegalArgumentException("当前只支持对训练任务产出的模型执行一键 RKNN 转换。");
-    }
-    AppState.TrainingJob job;
-    AppState.TrainingProject project;
-    AppState.Dataset dataset;
-    try {
-      job = requireJob(model.getSourceJobId());
-      project = requireProject(job.getProjectId());
-      dataset = requireDataset(project.getDatasetId());
-    } catch (IllegalArgumentException exception) {
-      throw new IllegalArgumentException("当前只支持对仍关联训练任务的数据模型执行 RKNN 转换。");
+    AppState.TrainingJob job = null;
+    AppState.TrainingProject project = null;
+    AppState.Dataset dataset = null;
+    if (StringUtils.hasText(model.getSourceJobId()) && !"manual".equals(model.getSourceJobId())) {
+      try {
+        job = requireJob(model.getSourceJobId());
+        project = requireProject(job.getProjectId());
+        dataset = requireDataset(project.getDatasetId());
+      } catch (IllegalArgumentException ignored) {
+        job = null;
+        project = null;
+        dataset = null;
+      }
     }
     model.setRknnStatus("running");
     model.setRknnMessage("正在按 " + targetChip + " 转换 RKNN。");
@@ -305,7 +309,10 @@ public class AppStateStore {
         resolvePythonCommand(),
         targetChip
     );
-    addTimeline("模型转换已执行", model.getName() + " 已按 " + targetChip + " 执行 RKNN 转换。");
+    String suffix = project != null && dataset != null
+        ? "，并尝试生成默认算法包。"
+        : "。";
+    addTimeline("模型转换已执行", model.getName() + " 已按 " + targetChip + " 执行 RKNN 转换" + suffix);
     save();
     return model;
   }
@@ -382,6 +389,20 @@ public class AppStateStore {
     entry.setDescription(description);
     entry.setAt(now());
     state.getTimeline().add(0, entry);
+  }
+
+  private String defaultRknnMessage(String sourceFormat) {
+    String normalized = sourceFormat == null ? "" : sourceFormat.toLowerCase();
+    if ("onnx".equals(normalized)) {
+      return "手工或历史 ONNX 模型可填写目标芯片后执行 ONNX -> RKNN 转换。";
+    }
+    if ("pt".equals(normalized)) {
+      return "手工或历史 PT 模型可填写目标芯片后执行 PT -> RKNN 转换。";
+    }
+    if ("rknn".equals(normalized)) {
+      return "当前模型已经是 RKNN，可按默认格式继续处理。";
+    }
+    return "当前模型可填写目标芯片后执行 RKNN 转换。";
   }
 
   private void launchJob(final AppState.TrainingJob job,

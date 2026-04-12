@@ -3,7 +3,7 @@
     <PageHeader
       eyebrow="Models"
       title="模型仓库"
-      description="集中登记本机导出的 YOLO 模型产物，并展示默认算法包转换结果。训练完成后系统会优先按默认格式自动打包。"
+      description="集中登记本机导出的 YOLO 模型产物，并展示默认算法包转换结果。训练产物会优先自动打包，手工或历史 PT/ONNX 模型也可填写芯片后转成 RKNN。"
     />
 
     <section class="content-grid">
@@ -15,7 +15,7 @@
           <input v-model.trim="form.yoloVersion" class="input" placeholder="YOLO 版本" />
           <input v-model.trim="form.exportFormat" class="input" placeholder="导出格式，例如 onnx" />
           <input v-model.number="form.map50" class="input" type="number" step="0.001" placeholder="mAP50" />
-          <input v-model.trim="form.filePath" class="input input-wide" placeholder="本地文件路径" />
+          <input v-model.trim="form.filePath" class="input input-wide" placeholder="本地文件路径（pt / onnx / rknn）" />
         </div>
         <div class="form-actions">
           <button class="button" :disabled="submitting" @click="registerModel">
@@ -156,7 +156,7 @@ async function convertToRknn(id) {
       body: JSON.stringify({ targetChip: targetChips.value[id] }),
     })
     await loadModels()
-    message.value = 'RKNN 转换与默认算法包生成已提交。'
+    message.value = 'RKNN 转换已提交；若模型带训练元数据，会继续生成默认算法包。'
   } catch (err) {
     error.value = err instanceof Error ? err.message : 'RKNN 转换失败'
   } finally {
@@ -165,7 +165,8 @@ async function convertToRknn(id) {
 }
 
 function canConvert(item) {
-  return Boolean(item?.sourceJobId && item.sourceJobId.startsWith('job-') && item.rknnStatus !== 'legacy')
+  const format = String(item?.sourceModelFormat || item?.exportFormat || '').toLowerCase()
+  return ['pt', 'onnx', 'rknn'].includes(format) && item?.rknnStatus !== 'running'
 }
 
 onMounted(loadModels)

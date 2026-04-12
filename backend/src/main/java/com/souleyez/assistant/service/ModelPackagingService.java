@@ -78,13 +78,6 @@ public class ModelPackagingService {
     }
     model.setTargetChip(targetChip);
     Path workspaceRoot = resolveWorkspaceRoot();
-    Path templatePath = resolveAgainstWorkspace(workspaceRoot, configuredTemplatePath);
-    if (!Files.exists(templatePath)) {
-      model.setPackageStatus("not-configured");
-      model.setPackageMessage("默认算法包模板不存在: " + templatePath);
-      return;
-    }
-
     Path sourceModelPath = StringUtils.hasText(model.getSourceModelPath())
         ? Paths.get(model.getSourceModelPath())
         : chooseSourceModelPath(model, job);
@@ -107,25 +100,43 @@ public class ModelPackagingService {
       Path rknnPath = sourceModelPath;
       String sourceFormat = model.getSourceModelFormat();
       if ("rknn".equals(sourceFormat)) {
+        model.setRknnPath(rknnPath.toString());
         model.setRknnStatus("ready");
         model.setRknnMessage("模型已经是 RKNN，直接按默认格式打包。");
       } else if ("pt".equals(sourceFormat)) {
-        rknnPath = exportRknnWithUltralytics(workspaceRoot, sourceModelPath, project, model, pythonCommand, targetChip);
+        int imageSize = project != null && project.getImageSize() > 0 ? project.getImageSize() : 640;
+        rknnPath = exportRknnWithUltralytics(workspaceRoot, sourceModelPath, imageSize, model, pythonCommand, targetChip);
+        model.setRknnPath(rknnPath.toString());
+        model.setRknnStatus("ready");
+        model.setRknnMessage("已按 " + targetChip + " 完成 RKNN 转换。");
+      } else if ("onnx".equals(sourceFormat)) {
+        rknnPath = exportRknnFromOnnx(workspaceRoot, sourceModelPath, model, pythonCommand, targetChip);
         model.setRknnPath(rknnPath.toString());
         model.setRknnStatus("ready");
         model.setRknnMessage("已按 " + targetChip + " 完成 RKNN 转换。");
       } else {
         model.setRknnStatus("unsupported-source");
-        model.setRknnMessage("当前只支持从 PT 或现成 RKNN 继续处理，当前源格式是 " + sourceFormat + "。");
+        model.setRknnMessage("当前只支持从 PT、ONNX 或现成 RKNN 继续处理，当前源格式是 " + sourceFormat + "。");
         return;
       }
 
       model.setFilePath(rknnPath.toString());
       model.setExportFormat("rknn");
-      packageModel(workspaceRoot, templatePath, model, project, dataset, rknnPath, pythonCommand);
-      if (!"failed".equals(model.getPackageStatus()) && !"not-configured".equals(model.getPackageStatus())) {
-        model.setPackageStatus("ready");
-        model.setPackageMessage("已完成 RKNN 转换，并按默认 " + defaultVariant + " 格式生成算法包。");
+      if (project != null && dataset != null) {
+        Path templatePath = resolveAgainstWorkspace(workspaceRoot, configuredTemplatePath);
+        if (!Files.exists(templatePath)) {
+          model.setPackageStatus("not-configured");
+          model.setPackageMessage("默认算法包模板不存在: " + templatePath);
+          return;
+        }
+        packageModel(workspaceRoot, templatePath, model, project, dataset, rknnPath, pythonCommand);
+        if (!"failed".equals(model.getPackageStatus()) && !"not-configured".equals(model.getPackageStatus())) {
+          model.setPackageStatus("ready");
+          model.setPackageMessage("已完成 RKNN 转换，并按默认 " + defaultVariant + " 格式生成算法包。");
+        }
+      } else {
+        model.setPackageStatus("metadata-required");
+        model.setPackageMessage("已完成 RKNN 转换，但当前模型未关联训练数据集，暂不自动生成算法包。");
       }
     } catch (IOException exception) {
       model.setRknnStatus("failed");
@@ -173,7 +184,7 @@ public class ModelPackagingService {
 
   private Path chooseSourceModelPath(AppState.ModelArtifact model, AppState.TrainingJob job) {
     List<Path> candidates = new ArrayList<Path>();
-    if (StringUtils.hasText(job.getWeightsPath())) {
+    if (job != null && StringUtils.hasText(job.getWeightsPath())) {
       Path weightsPath = Paths.get(job.getWeightsPath());
       candidates.add(weightsPath.resolve("best.rknn"));
       candidates.add(weightsPath.resolve("best.onnx"));
@@ -332,7 +343,7 @@ public class ModelPackagingService {
 
   private Path exportRknnWithUltralytics(Path workspaceRoot,
                                          Path sourceModelPath,
-                                         AppState.TrainingProject project,
+                                         int imageSize,
                                          AppState.ModelArtifact model,
                                          String pythonCommand,
                                          String targetChip) throws IOException {
@@ -348,7 +359,7 @@ public class ModelPackagingService {
         "workdir.mkdir(parents=True, exist_ok=True)",
         "before = {str(item.resolve()) for item in workdir.rglob('*.rknn')}",
         "model = YOLO(str(source))",
-        "model.export(format='rknn', name='" + normalizeForPython(targetChip) + "', imgsz=" + project.getImageSize() + ")",
+        "model.export(format='rknn', name='" + normalizeForPython(targetChip) + "', imgsz=" + imageSize + ")",
         "after = [str(item.resolve()) for item in workdir.rglob('*.rknn') if str(item.resolve()) not in before]",
         "if not after:",
         "    after = [str(item.resolve()) for item in workdir.rglob('*.rknn')]",
@@ -383,6 +394,66 @@ public class ModelPackagingService {
     }
   }
 
+  private Path exportRknnFromOnnx(Path workspaceRoot,
+                                  Path sourceModelPath,
+                                  AppState.ModelArtifact model,
+                                  String pythonCommand,
+                                  String targetChip) throws IOException {
+    String effectivePython = StringUtils.hasText(pythonCommand) ? pythonCommand : "python";
+    Path exportRoot = workspaceRoot.resolve(Paths.get("data", "runtime", "rknn-exports", model.getId(), targetChip));
+    Files.createDirectories(exportRoot);
+    String outputName = baseName(sourceModelPath.getFileName().toString()) + "-" + targetChip + ".rknn";
+
+    String script = String.join("\n", Arrays.asList(
+        "from pathlib import Path",
+        "from rknn.api import RKNN",
+        "source = Path(r'" + normalizeForPython(sourceModelPath.toString()) + "')",
+        "workdir = Path(r'" + normalizeForPython(exportRoot.toString()) + "')",
+        "output = workdir / '" + normalizeForPython(outputName) + "'",
+        "workdir.mkdir(parents=True, exist_ok=True)",
+        "rknn = RKNN(verbose=False)",
+        "ret = rknn.config(target_platform='" + normalizeForPython(targetChip) + "')",
+        "if ret != 0:",
+        "    raise SystemExit('config failed: %s' % ret)",
+        "ret = rknn.load_onnx(model=str(source))",
+        "if ret != 0:",
+        "    raise SystemExit('load_onnx failed: %s' % ret)",
+        "ret = rknn.build(do_quantization=False)",
+        "if ret != 0:",
+        "    raise SystemExit('build failed: %s' % ret)",
+        "ret = rknn.export_rknn(str(output))",
+        "if ret != 0:",
+        "    raise SystemExit('export_rknn failed: %s' % ret)",
+        "print('RKNN_PATH=' + str(output.resolve()))",
+        "rknn.release()"
+    ));
+
+    ProcessBuilder builder = new ProcessBuilder(effectivePython, "-c", script);
+    builder.directory(exportRoot.toFile());
+    builder.redirectErrorStream(true);
+    Process process = builder.start();
+    String output;
+    try {
+      output = readProcessOutput(process.getInputStream());
+      int exitCode = process.waitFor();
+      if (exitCode != 0) {
+        throw new IOException(output.trim());
+      }
+      for (String line : output.split("\\R")) {
+        if (line.startsWith("RKNN_PATH=")) {
+          Path exported = Paths.get(line.substring("RKNN_PATH=".length()).trim());
+          if (Files.exists(exported)) {
+            return exported;
+          }
+        }
+      }
+      throw new IOException("未从 ONNX 转换日志中解析到 RKNN 路径。");
+    } catch (InterruptedException exception) {
+      Thread.currentThread().interrupt();
+      throw new IOException("onnx to rknn export interrupted", exception);
+    }
+  }
+
   private int deriveGeid(AppState.TrainingProject project, AppState.Dataset dataset) {
     String seed = project.getName() + ":" + dataset.getId();
     return 100000 + Math.abs(seed.hashCode() % 900000);
@@ -406,6 +477,11 @@ public class ModelPackagingService {
   private String extensionOf(String fileName) {
     int index = fileName.lastIndexOf('.');
     return index >= 0 ? fileName.substring(index + 1).toLowerCase(Locale.ROOT) : "bin";
+  }
+
+  private String baseName(String fileName) {
+    int index = fileName.lastIndexOf('.');
+    return index >= 0 ? fileName.substring(0, index) : fileName;
   }
 
   private String normalizeForPython(String value) {
