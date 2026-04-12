@@ -1,0 +1,11 @@
+{
+  "model_path": "models/default.rknn",
+  "cls_num": 1,
+  "cls_name": [
+    "default"
+  ],
+  "cls_enable": [
+    0
+  ],
+  "type": 8
+}

@@ -1,0 +1,37 @@
+{
+  "template_path": "./tests/fixtures/template_m1",
+  "output_dir": "./build/fire_smoke_m1",
+  "output_archive": "./build/fire_smoke_m1.zip",
+  "package_name": "fire_smoke_m1",
+  "variant": "m1",
+  "engine": {
+    "name": "fire_smoke",
+    "geid": 1001
+  },
+  "model": {
+    "source_path": "./tests/fixtures/artifacts/fire_smoke.rknn",
+    "package_path": "models/fire_smoke.rknn",
+    "framework": "yolov8"
+  },
+  "classes": [
+    {
+      "id": 0,
+      "name": "fire",
+      "display_name": "火焰",
+      "enabled": true
+    },
+    {
+      "id": 1,
+      "name": "smoke",
+      "display_name": "烟雾",
+      "enabled": true
+    }
+  ],
+  "conf_thresh": 0.25,
+  "nn_server_source_path": null,
+  "json_overrides": {
+    "base.json": {},
+    "nn.json": {},
+    "nn.extend.json": {}
+  }
+}

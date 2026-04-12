@@ -1,0 +1,11 @@
+{
+  "extend": {
+    "conf_thresh": 0.5,
+    "class": [
+      {
+        "classes": 0,
+        "value": "legacy_a"
+      }
+    ]
+  }
+}

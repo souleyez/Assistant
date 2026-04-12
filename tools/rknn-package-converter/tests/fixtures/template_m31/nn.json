@@ -1,0 +1,15 @@
+{
+  "nn": {
+    "model_path": "models/legacy.rknn",
+    "cls_num": 2,
+    "cls_name": [
+      "legacy_a",
+      "legacy_b"
+    ],
+    "cls_enable": [
+      0,
+      1
+    ],
+    "type": 6
+  }
+}
