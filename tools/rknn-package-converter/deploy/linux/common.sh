@@ -83,3 +83,11 @@ print_status_line() {
     printf "%s: stopped\n" "$name"
   fi
 }
+
+is_http_reachable() {
+  local url="$1"
+  if ! command -v curl >/dev/null 2>&1; then
+    return 1
+  fi
+  curl -fsS "$url" >/dev/null 2>&1
+}

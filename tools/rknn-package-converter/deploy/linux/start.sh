@@ -6,7 +6,9 @@ source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/common.sh"
 ensure_runtime_dirs
 
 if [[ "$ENABLE_OLLAMA" == "1" && -x "$OLLAMA_BIN" ]]; then
-  if ! is_pid_running "$OLLAMA_PID_FILE"; then
+  if is_http_reachable "$OLLAMA_URL/api/tags"; then
+    rm -f "$OLLAMA_PID_FILE"
+  elif ! is_pid_running "$OLLAMA_PID_FILE"; then
     (
       cd "$APP_ROOT"
       nohup env OLLAMA_HOST="$OLLAMA_HOST" OLLAMA_MODELS="$OLLAMA_MODELS" "$OLLAMA_BIN" serve >>"$OLLAMA_LOG" 2>&1 &
