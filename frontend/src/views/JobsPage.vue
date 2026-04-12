@@ -126,7 +126,7 @@ async function startJob() {
 async function completeJob(id) {
   await request(`/api/jobs/${id}/complete`, { method: 'POST', body: '{}' })
   await loadAll()
-  message.value = '训练任务已完成，并已登记模型。'
+  message.value = '训练任务已完成，模型已登记，并已按默认格式尝试生成算法包。'
 }
 
 async function cancelJob(id) {

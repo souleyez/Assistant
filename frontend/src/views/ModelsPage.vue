@@ -3,7 +3,7 @@
     <PageHeader
       eyebrow="Models"
       title="模型仓库"
-      description="集中登记本机导出的 YOLO 模型产物，包括 best.pt、ONNX 或 TensorRT 等推理格式。"
+      description="集中登记本机导出的 YOLO 模型产物，并展示默认算法包转换结果。训练完成后系统会优先按默认格式自动打包。"
     />
 
     <section class="content-grid">
@@ -33,6 +33,7 @@
               <th>项目</th>
               <th>版本</th>
               <th>指标</th>
+              <th>算法包</th>
               <th>路径</th>
             </tr>
           </thead>
@@ -45,7 +46,14 @@
               <td>{{ item.projectName }}</td>
               <td>{{ item.yoloVersion }}</td>
               <td>mAP50 {{ item.map50 }}</td>
-              <td>{{ item.filePath }}</td>
+              <td>
+                <div class="table-subtle">{{ item.packageVariant || 'm1' }} · {{ item.packageStatus || 'n/a' }}</div>
+                <div class="table-subtle">{{ item.packageMessage || '训练完成后会尝试自动打包。' }}</div>
+              </td>
+              <td>
+                <div class="table-subtle">model {{ item.filePath }}</div>
+                <div class="table-subtle">package {{ item.packageArchivePath || item.packageDir || '-' }}</div>
+              </td>
             </tr>
           </tbody>
         </table>

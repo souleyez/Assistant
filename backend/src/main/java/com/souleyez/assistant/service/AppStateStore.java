@@ -29,7 +29,12 @@ public class AppStateStore {
   private final Path stateFile = Paths.get("data", "runtime", "gemma4-yolo-studio.json");
   private final Path studioRoot = Paths.get("data", "runtime", "studio");
   private final Map<String, Process> activeProcesses = new HashMap<String, Process>();
+  private final ModelPackagingService modelPackagingService;
   private AppState state;
+
+  public AppStateStore(ModelPackagingService modelPackagingService) {
+    this.modelPackagingService = modelPackagingService;
+  }
 
   @PostConstruct
   public synchronized void init() throws IOException {
@@ -39,6 +44,20 @@ public class AppStateStore {
       state = objectMapper.readValue(stateFile.toFile(), AppState.class);
       if (state.getQuickStarts() == null) {
         state.setQuickStarts(new ArrayList<AppState.QuickStartSession>());
+      }
+      for (AppState.ModelArtifact item : state.getModels()) {
+        if (!StringUtils.hasText(item.getSourceModelPath())) {
+          item.setSourceModelPath(item.getFilePath());
+        }
+        if (!StringUtils.hasText(item.getSourceModelFormat())) {
+          item.setSourceModelFormat(item.getExportFormat());
+        }
+        if (!StringUtils.hasText(item.getPackageVariant())) {
+          item.setPackageVariant("m1");
+        }
+        if (!StringUtils.hasText(item.getPackageStatus())) {
+          item.setPackageStatus("legacy");
+        }
       }
       return;
     }
@@ -184,7 +203,7 @@ public class AppStateStore {
     AppState.TrainingProject project = requireProject(job.getProjectId());
     project.setStatus("validated");
     project.setUpdatedAt(now());
-    registerModelFromCompletedJob(job, project);
+    registerModelFromCompletedJob(job, project, requireDataset(project.getDatasetId()));
 
     state.getPlatform().getRuntime().setTrainingBusy(false);
     addTimeline("训练完成", project.getName() + " 已生成首个可用模型。");
@@ -238,8 +257,16 @@ public class AppStateStore {
     artifact.setExportFormat(defaultText(incoming.getExportFormat(), "onnx"));
     artifact.setMap50(incoming.getMap50());
     artifact.setFilePath(defaultText(incoming.getFilePath(), "models/" + artifact.getName() + ".onnx"));
+    artifact.setSourceModelPath(defaultText(incoming.getSourceModelPath(), artifact.getFilePath()));
+    artifact.setSourceModelFormat(defaultText(incoming.getSourceModelFormat(), artifact.getExportFormat()));
     artifact.setCreatedAt(now());
     artifact.setDeploymentTarget(defaultText(incoming.getDeploymentTarget(), "local-edge"));
+    artifact.setPackageVariant(defaultText(incoming.getPackageVariant(), "m1"));
+    artifact.setPackageStatus(defaultText(incoming.getPackageStatus(), "manual"));
+    artifact.setPackageMessage(incoming.getPackageMessage());
+    artifact.setPackageDir(incoming.getPackageDir());
+    artifact.setPackageArchivePath(incoming.getPackageArchivePath());
+    artifact.setPackageManifestPath(incoming.getPackageManifestPath());
     state.getModels().add(0, artifact);
     addTimeline("登记模型", artifact.getName() + " 已加入模型仓库。");
     save();
@@ -360,7 +387,7 @@ public class AppStateStore {
       enrichMetricsFromRun(job);
       project.setStatus("validated");
       project.setUpdatedAt(now());
-      registerModelFromCompletedJob(job, project);
+      registerModelFromCompletedJob(job, project, requireDataset(project.getDatasetId()));
       addTimeline("训练完成", project.getName() + " 的本地训练进程已正常结束。");
     } else {
       job.setStatus("failed");
@@ -374,7 +401,9 @@ public class AppStateStore {
     save();
   }
 
-  private void registerModelFromCompletedJob(AppState.TrainingJob job, AppState.TrainingProject project) {
+  private void registerModelFromCompletedJob(AppState.TrainingJob job,
+                                             AppState.TrainingProject project,
+                                             AppState.Dataset dataset) {
     for (AppState.ModelArtifact artifact : state.getModels()) {
       if (job.getId().equals(artifact.getSourceJobId())) {
         return;
@@ -390,8 +419,14 @@ public class AppStateStore {
     model.setExportFormat("pt");
     model.setMap50(job.getMap50());
     model.setFilePath(Paths.get(job.getWeightsPath(), "best.pt").toString());
+    model.setSourceModelPath(model.getFilePath());
+    model.setSourceModelFormat("pt");
     model.setCreatedAt(now());
     model.setDeploymentTarget("local-edge");
+    model.setPackageVariant("m1");
+    model.setPackageStatus("pending");
+    model.setPackageMessage("训练完成后正在生成默认算法包。");
+    modelPackagingService.packageTrainedModel(model, project, dataset, job, resolvePythonCommand());
     state.getModels().add(0, model);
   }
 
@@ -724,8 +759,13 @@ public class AppStateStore {
     model.setExportFormat("onnx");
     model.setMap50(0.887d);
     model.setFilePath("models/helmet-guard-best-2026-04.onnx");
+    model.setSourceModelPath("models/helmet-guard-best-2026-04.onnx");
+    model.setSourceModelFormat("onnx");
     model.setCreatedAt(now());
     model.setDeploymentTarget("factory-gate-cam");
+    model.setPackageVariant("m1");
+    model.setPackageStatus("legacy");
+    model.setPackageMessage("历史样例模型，尚未纳入默认算法包自动转换。");
     appState.setModels(new ArrayList<AppState.ModelArtifact>(Collections.singletonList(model)));
 
     AppState.GemmaConversation conversation = new AppState.GemmaConversation();

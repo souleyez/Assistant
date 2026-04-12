@@ -681,8 +681,16 @@ public class AppState {
     private String exportFormat;
     private double map50;
     private String filePath;
+    private String sourceModelPath;
+    private String sourceModelFormat;
     private String createdAt;
     private String deploymentTarget;
+    private String packageVariant;
+    private String packageStatus;
+    private String packageMessage;
+    private String packageDir;
+    private String packageArchivePath;
+    private String packageManifestPath;
 
     public String getId() {
       return id;
@@ -756,6 +764,22 @@ public class AppState {
       this.filePath = filePath;
     }
 
+    public String getSourceModelPath() {
+      return sourceModelPath;
+    }
+
+    public void setSourceModelPath(String sourceModelPath) {
+      this.sourceModelPath = sourceModelPath;
+    }
+
+    public String getSourceModelFormat() {
+      return sourceModelFormat;
+    }
+
+    public void setSourceModelFormat(String sourceModelFormat) {
+      this.sourceModelFormat = sourceModelFormat;
+    }
+
     public String getCreatedAt() {
       return createdAt;
     }
@@ -770,6 +794,54 @@ public class AppState {
 
     public void setDeploymentTarget(String deploymentTarget) {
       this.deploymentTarget = deploymentTarget;
+    }
+
+    public String getPackageVariant() {
+      return packageVariant;
+    }
+
+    public void setPackageVariant(String packageVariant) {
+      this.packageVariant = packageVariant;
+    }
+
+    public String getPackageStatus() {
+      return packageStatus;
+    }
+
+    public void setPackageStatus(String packageStatus) {
+      this.packageStatus = packageStatus;
+    }
+
+    public String getPackageMessage() {
+      return packageMessage;
+    }
+
+    public void setPackageMessage(String packageMessage) {
+      this.packageMessage = packageMessage;
+    }
+
+    public String getPackageDir() {
+      return packageDir;
+    }
+
+    public void setPackageDir(String packageDir) {
+      this.packageDir = packageDir;
+    }
+
+    public String getPackageArchivePath() {
+      return packageArchivePath;
+    }
+
+    public void setPackageArchivePath(String packageArchivePath) {
+      this.packageArchivePath = packageArchivePath;
+    }
+
+    public String getPackageManifestPath() {
+      return packageManifestPath;
+    }
+
+    public void setPackageManifestPath(String packageManifestPath) {
+      this.packageManifestPath = packageManifestPath;
     }
   }
 
