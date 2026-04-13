@@ -1,6 +1,7 @@
 package com.souleyez.assistant.service;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.DeserializationFeature;
 import com.fasterxml.jackson.databind.SerializationFeature;
 import com.souleyez.assistant.domain.AppState;
 import java.io.File;
@@ -26,6 +27,7 @@ import org.springframework.util.StringUtils;
 @Service
 public class AppStateStore {
   private final ObjectMapper objectMapper = new ObjectMapper().findAndRegisterModules()
+      .configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false)
       .enable(SerializationFeature.INDENT_OUTPUT);
   private final Path stateFile = Paths.get("data", "runtime", "gemma4-yolo-studio.json");
   private final Path studioRoot = Paths.get("data", "runtime", "studio");
