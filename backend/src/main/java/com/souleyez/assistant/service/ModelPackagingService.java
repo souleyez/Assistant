@@ -24,15 +24,18 @@ import org.springframework.util.StringUtils;
 public class ModelPackagingService {
   private final ObjectMapper objectMapper = new ObjectMapper().findAndRegisterModules();
   private final String defaultVariant;
+  private final String defaultTargetChip;
   private final String configuredTemplatePath;
   private final double defaultConfThresh;
 
   public ModelPackagingService(
       @Value("${assistant.packaging.default-variant:m1}") String defaultVariant,
+      @Value("${assistant.rknn.default-target-chip:rk3576}") String defaultTargetChip,
       @Value("${assistant.packaging.template-path:tools/rknn-package-converter/tests/fixtures/template_m1}") String configuredTemplatePath,
       @Value("${assistant.packaging.default-conf-thresh:0.25}") double defaultConfThresh
   ) {
     this.defaultVariant = defaultVariant;
+    this.defaultTargetChip = defaultTargetChip;
     this.configuredTemplatePath = configuredTemplatePath;
     this.defaultConfThresh = defaultConfThresh;
   }
@@ -61,7 +64,7 @@ public class ModelPackagingService {
     model.setSourceModelPath(sourceModelPath.toString());
     model.setSourceModelFormat(extensionOf(sourceModelPath.getFileName().toString()));
     model.setRknnStatus("pending");
-    model.setRknnMessage("当前训练产物还不是 RKNN；如需 Rockchip 交付，请由操作员填写目标芯片后执行转换。");
+    model.setRknnMessage("当前训练产物还不是 RKNN；如需 Rockchip 交付，可填写目标芯片，未填写时默认按 " + defaultTargetChip + " 转换。");
     model.setRknnPath(null);
 
     packageModel(workspaceRoot, templatePath, model, project, dataset, sourceModelPath, pythonCommand);
@@ -73,10 +76,8 @@ public class ModelPackagingService {
                                            AppState.TrainingJob job,
                                            String pythonCommand,
                                            String targetChip) {
-    if (!StringUtils.hasText(targetChip)) {
-      throw new IllegalArgumentException("请先填写目标 Rockchip 芯片型号。");
-    }
-    model.setTargetChip(targetChip);
+    String effectiveTargetChip = normalizeTargetChip(targetChip);
+    model.setTargetChip(effectiveTargetChip);
     Path workspaceRoot = resolveWorkspaceRoot();
     Path sourceModelPath = StringUtils.hasText(model.getSourceModelPath())
         ? Paths.get(model.getSourceModelPath())
@@ -105,15 +106,15 @@ public class ModelPackagingService {
         model.setRknnMessage("模型已经是 RKNN，直接按默认格式打包。");
       } else if ("pt".equals(sourceFormat)) {
         int imageSize = project != null && project.getImageSize() > 0 ? project.getImageSize() : 640;
-        rknnPath = exportRknnWithUltralytics(workspaceRoot, sourceModelPath, imageSize, model, pythonCommand, targetChip);
+        rknnPath = exportRknnWithUltralytics(workspaceRoot, sourceModelPath, imageSize, model, pythonCommand, effectiveTargetChip);
         model.setRknnPath(rknnPath.toString());
         model.setRknnStatus("ready");
-        model.setRknnMessage("已按 " + targetChip + " 完成 RKNN 转换。");
+        model.setRknnMessage("已按 " + effectiveTargetChip + " 完成 RKNN 转换。");
       } else if ("onnx".equals(sourceFormat)) {
-        rknnPath = exportRknnFromOnnx(workspaceRoot, sourceModelPath, model, pythonCommand, targetChip);
+        rknnPath = exportRknnFromOnnx(workspaceRoot, sourceModelPath, model, pythonCommand, effectiveTargetChip);
         model.setRknnPath(rknnPath.toString());
         model.setRknnStatus("ready");
-        model.setRknnMessage("已按 " + targetChip + " 完成 RKNN 转换。");
+        model.setRknnMessage("已按 " + effectiveTargetChip + " 完成 RKNN 转换。");
       } else {
         model.setRknnStatus("unsupported-source");
         model.setRknnMessage("当前只支持从 PT、ONNX 或现成 RKNN 继续处理，当前源格式是 " + sourceFormat + "。");
@@ -482,6 +483,14 @@ public class ModelPackagingService {
   private String baseName(String fileName) {
     int index = fileName.lastIndexOf('.');
     return index >= 0 ? fileName.substring(0, index) : fileName;
+  }
+
+  private String normalizeTargetChip(String targetChip) {
+    String normalized = StringUtils.hasText(targetChip) ? targetChip.trim().toLowerCase(Locale.ROOT) : defaultTargetChip;
+    if ("rv3576".equals(normalized)) {
+      return "rk3576";
+    }
+    return normalized;
   }
 
   private String normalizeForPython(String value) {

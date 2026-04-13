@@ -5,8 +5,6 @@ import com.souleyez.assistant.service.AppStateStore;
 import java.io.IOException;
 import java.util.Collections;
 import java.util.Map;
-import javax.validation.Valid;
-import javax.validation.constraints.NotBlank;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -37,12 +35,11 @@ public class ModelController {
 
   @PostMapping("/{id}/convert-rknn")
   public Map<String, Object> convertToRknn(@PathVariable String id,
-                                           @Valid @RequestBody ConvertRknnRequest request) throws IOException {
+                                           @RequestBody ConvertRknnRequest request) throws IOException {
     return Collections.<String, Object>singletonMap("item", store.convertModelToRknn(id, request.getTargetChip()));
   }
 
   public static class ConvertRknnRequest {
-    @NotBlank
     private String targetChip;
 
     public String getTargetChip() {

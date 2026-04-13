@@ -19,6 +19,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import javax.annotation.PostConstruct;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
 
@@ -30,10 +31,13 @@ public class AppStateStore {
   private final Path studioRoot = Paths.get("data", "runtime", "studio");
   private final Map<String, Process> activeProcesses = new HashMap<String, Process>();
   private final ModelPackagingService modelPackagingService;
+  private final String defaultTargetChip;
   private AppState state;
 
-  public AppStateStore(ModelPackagingService modelPackagingService) {
+  public AppStateStore(ModelPackagingService modelPackagingService,
+                       @Value("${assistant.rknn.default-target-chip:rk3576}") String defaultTargetChip) {
     this.modelPackagingService = modelPackagingService;
+    this.defaultTargetChip = defaultTargetChip;
   }
 
   @PostConstruct
@@ -300,7 +304,7 @@ public class AppStateStore {
       }
     }
     model.setRknnStatus("running");
-    model.setRknnMessage("正在按 " + targetChip + " 转换 RKNN。");
+    model.setRknnMessage("正在执行 RKNN 转换，未填写芯片时默认按 " + defaultTargetChip + " 处理。");
     modelPackagingService.convertModelToRknnAndPackage(
         model,
         project,
@@ -309,10 +313,11 @@ public class AppStateStore {
         resolvePythonCommand(),
         targetChip
     );
+    String effectiveChip = StringUtils.hasText(model.getTargetChip()) ? model.getTargetChip() : defaultTargetChip;
     String suffix = project != null && dataset != null
         ? "，并尝试生成默认算法包。"
         : "。";
-    addTimeline("模型转换已执行", model.getName() + " 已按 " + targetChip + " 执行 RKNN 转换" + suffix);
+    addTimeline("模型转换已执行", model.getName() + " 已按 " + effectiveChip + " 执行 RKNN 转换" + suffix);
     save();
     return model;
   }
@@ -394,15 +399,15 @@ public class AppStateStore {
   private String defaultRknnMessage(String sourceFormat) {
     String normalized = sourceFormat == null ? "" : sourceFormat.toLowerCase();
     if ("onnx".equals(normalized)) {
-      return "手工或历史 ONNX 模型可填写目标芯片后执行 ONNX -> RKNN 转换。";
+      return "手工或历史 ONNX 模型可填写目标芯片后执行 ONNX -> RKNN 转换；未填写时默认按 " + defaultTargetChip + "。";
     }
     if ("pt".equals(normalized)) {
-      return "手工或历史 PT 模型可填写目标芯片后执行 PT -> RKNN 转换。";
+      return "手工或历史 PT 模型可填写目标芯片后执行 PT -> RKNN 转换；未填写时默认按 " + defaultTargetChip + "。";
     }
     if ("rknn".equals(normalized)) {
       return "当前模型已经是 RKNN，可按默认格式继续处理。";
     }
-    return "当前模型可填写目标芯片后执行 RKNN 转换。";
+    return "当前模型可填写目标芯片后执行 RKNN 转换；未填写时默认按 " + defaultTargetChip + "。";
   }
 
   private void launchJob(final AppState.TrainingJob job,
@@ -489,7 +494,7 @@ public class AppStateStore {
     model.setSourceModelPath(model.getFilePath());
     model.setSourceModelFormat("pt");
     model.setRknnStatus("pending");
-    model.setRknnMessage("当前训练产物为 PT；如需 Rockchip 交付，请填写目标芯片后执行 RKNN 转换。");
+    model.setRknnMessage("当前训练产物为 PT；如需 Rockchip 交付，可填写目标芯片，未填写时默认按 " + defaultTargetChip + " 转换。");
     model.setRknnPath(null);
     model.setCreatedAt(now());
     model.setDeploymentTarget("local-edge");

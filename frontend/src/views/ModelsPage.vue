@@ -3,7 +3,7 @@
     <PageHeader
       eyebrow="Models"
       title="模型仓库"
-      description="集中登记本机导出的 YOLO 模型产物，并展示默认算法包转换结果。训练产物会优先自动打包，手工或历史 PT/ONNX 模型也可填写芯片后转成 RKNN。"
+      description="集中登记本机导出的 YOLO 模型产物，并展示默认算法包转换结果。训练产物会优先自动打包，手工或历史 PT/ONNX 模型也可转成 RKNN；未填写芯片时默认按 rk3576 处理，rv3576 写法也会自动兼容。"
     />
 
     <section class="content-grid">
@@ -66,12 +66,12 @@
                   <input
                     v-model.trim="targetChips[item.id]"
                     class="input"
-                    placeholder="rk3588 / rk3568 / rv1106"
+                    placeholder="默认 rk3576，兼容 rv3576 写法"
                     :disabled="!canConvert(item)"
                   />
                   <button
                     class="button button-secondary"
-                    :disabled="submitting || !targetChips[item.id] || !canConvert(item)"
+                    :disabled="submitting || !canConvert(item)"
                     @click="convertToRknn(item.id)"
                   >
                     转 RKNN
@@ -101,6 +101,7 @@ const message = ref('')
 const error = ref('')
 const submitting = ref(false)
 const targetChips = ref({})
+const defaultTargetChip = 'rk3576'
 const form = ref({
   name: '',
   projectName: '',
@@ -115,7 +116,7 @@ async function loadModels() {
   items.value = response.items
   const next = {}
   for (const item of items.value) {
-    next[item.id] = targetChips.value[item.id] || item.targetChip || ''
+    next[item.id] = targetChips.value[item.id] || item.targetChip || defaultTargetChip
   }
   targetChips.value = next
 }
@@ -151,12 +152,13 @@ async function convertToRknn(id) {
   message.value = ''
   error.value = ''
   try {
+    const targetChip = targetChips.value[id] || defaultTargetChip
     await request(`/api/models/${id}/convert-rknn`, {
       method: 'POST',
-      body: JSON.stringify({ targetChip: targetChips.value[id] }),
+      body: JSON.stringify({ targetChip }),
     })
     await loadModels()
-    message.value = 'RKNN 转换已提交；若模型带训练元数据，会继续生成默认算法包。'
+    message.value = `RKNN 转换已提交，默认芯片为 ${targetChip}；若模型带训练元数据，会继续生成默认算法包。`
   } catch (err) {
     error.value = err instanceof Error ? err.message : 'RKNN 转换失败'
   } finally {
