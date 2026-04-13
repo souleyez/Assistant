@@ -69,7 +69,8 @@ mvn spring-boot:run
 ## 说明
 
 - 当前后端使用本地 JSON 文件做轻量持久化
-- Gemma 4 当前先以平台内建议引擎占位，便于后续接真实本地推理服务
+- Gemma 运行时默认直连本地 Ollama：主模型 `gemma4:26b`，兜底模型 `gemma4:e4b`
+- 后端只有在目标模型真实存在于 Ollama 时才会标记 `Gemma ready`
 - 训练任务现在会生成本地运行目录、数据集 yaml、训练脚本和日志文件
 - 默认通过 `python` 启动训练；如果你要指定解释器，可设置环境变量 `YOLO_PYTHON`
 
@@ -85,6 +86,14 @@ pip install ultralytics
 
 ```powershell
 $env:YOLO_PYTHON = 'D:\miniconda3\envs\gemma4-yolo\python.exe'
+```
+
+如果你要切换本地 Gemma 配置，也可以在启动后端前指定：
+
+```powershell
+$env:ASSISTANT_GEMMA_OLLAMA_URL = 'http://127.0.0.1:11435'
+$env:ASSISTANT_GEMMA_MODEL = 'gemma4:26b'
+$env:ASSISTANT_GEMMA_FALLBACK_MODEL = 'gemma4:e4b'
 ```
 
 训练任务启动后，平台会在本地生成：
@@ -111,6 +120,14 @@ bash deploy/linux/setup-server.sh
 - 打包后端 jar
 - 以用户态后台进程启动前后端
 - 安装 `crontab @reboot`，服务器重启后自动拉起
+
+如果服务器上的 Ollama 不在默认地址，或你想切换主/备模型，可以在执行脚本前覆盖：
+
+```bash
+export ASSISTANT_GEMMA_OLLAMA_URL=http://127.0.0.1:11435
+export ASSISTANT_GEMMA_MODEL=gemma4:26b
+export ASSISTANT_GEMMA_FALLBACK_MODEL=gemma4:e4b
+```
 
 常用运维命令：
 

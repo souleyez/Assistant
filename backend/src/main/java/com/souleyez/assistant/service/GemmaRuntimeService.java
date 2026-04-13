@@ -30,31 +30,30 @@ public class GemmaRuntimeService {
   private final RestTemplate restTemplate;
   private final ObjectMapper objectMapper = new ObjectMapper().findAndRegisterModules();
   private final String ollamaUrl;
-  private final String model;
+  private final String primaryModel;
+  private final String fallbackModel;
 
   public GemmaRuntimeService(
       @Value("${assistant.gemma.ollama-url:http://127.0.0.1:11435}") String ollamaUrl,
-      @Value("${assistant.gemma.model:gemma4:31b-tuned}") String model
+      @Value("${assistant.gemma.model:gemma4:26b}") String model,
+      @Value("${assistant.gemma.fallback-model:gemma4:e4b}") String fallbackModel
   ) {
     SimpleClientHttpRequestFactory requestFactory = new SimpleClientHttpRequestFactory();
     requestFactory.setConnectTimeout(2000);
     requestFactory.setReadTimeout(180000);
     this.restTemplate = new RestTemplate(requestFactory);
     this.ollamaUrl = trimTrailingSlash(ollamaUrl);
-    this.model = model;
+    this.primaryModel = defaultModelName(model, "gemma4:26b");
+    this.fallbackModel = normalizeFallbackModel(fallbackModel, this.primaryModel);
   }
 
   public boolean isAvailable() {
-    try {
-      restTemplate.getForEntity(ollamaUrl + "/api/tags", String.class);
-      return true;
-    } catch (RuntimeException exception) {
-      return false;
-    }
+    return resolveAvailableModel() != null;
   }
 
   public String getConfiguredModel() {
-    return model;
+    String available = resolveAvailableModel();
+    return StringUtils.hasText(available) ? available : primaryModel;
   }
 
   public QuickStartPlan planQuickStart(String targetDescription,
@@ -82,8 +81,23 @@ public class GemmaRuntimeService {
   }
 
   private String generate(String prompt, boolean jsonFormat) {
+    RuntimeException lastError = null;
+    for (String targetModel : resolveGenerationCandidates()) {
+      try {
+        return generateWithModel(prompt, jsonFormat, targetModel);
+      } catch (RuntimeException exception) {
+        lastError = exception;
+      }
+    }
+    if (lastError != null) {
+      throw lastError;
+    }
+    throw new IllegalStateException("No Gemma model is available in Ollama");
+  }
+
+  private String generateWithModel(String prompt, boolean jsonFormat, String targetModel) {
     Map<String, Object> payload = new LinkedHashMap<String, Object>();
-    payload.put("model", model);
+    payload.put("model", targetModel);
     payload.put("prompt", prompt);
     payload.put("stream", Boolean.FALSE);
     if (jsonFormat) {
@@ -103,6 +117,61 @@ public class GemmaRuntimeService {
       throw new IllegalStateException("Gemma returned an empty response");
     }
     return ((String) response.get("response")).trim();
+  }
+
+  private List<String> resolveGenerationCandidates() {
+    Set<String> availableModels = fetchAvailableModels();
+    List<String> candidates = new ArrayList<String>();
+    if (availableModels.contains(primaryModel)) {
+      candidates.add(primaryModel);
+    }
+    if (StringUtils.hasText(fallbackModel)
+        && !fallbackModel.equals(primaryModel)
+        && availableModels.contains(fallbackModel)) {
+      candidates.add(fallbackModel);
+    }
+    if (candidates.isEmpty()) {
+      candidates.add(primaryModel);
+      if (StringUtils.hasText(fallbackModel) && !fallbackModel.equals(primaryModel)) {
+        candidates.add(fallbackModel);
+      }
+    }
+    return candidates;
+  }
+
+  private String resolveAvailableModel() {
+    Set<String> availableModels = fetchAvailableModels();
+    if (availableModels.contains(primaryModel)) {
+      return primaryModel;
+    }
+    if (StringUtils.hasText(fallbackModel) && availableModels.contains(fallbackModel)) {
+      return fallbackModel;
+    }
+    return null;
+  }
+
+  private Set<String> fetchAvailableModels() {
+    try {
+      @SuppressWarnings("unchecked")
+      Map<String, Object> response = restTemplate.getForObject(ollamaUrl + "/api/tags", Map.class);
+      Object rawModels = response == null ? null : response.get("models");
+      if (!(rawModels instanceof List<?>)) {
+        return Collections.emptySet();
+      }
+      Set<String> names = new LinkedHashSet<String>();
+      for (Object item : (List<?>) rawModels) {
+        if (!(item instanceof Map<?, ?>)) {
+          continue;
+        }
+        Object name = ((Map<?, ?>) item).get("name");
+        if (name != null && StringUtils.hasText(String.valueOf(name))) {
+          names.add(String.valueOf(name).trim());
+        }
+      }
+      return names;
+    } catch (RuntimeException exception) {
+      return Collections.emptySet();
+    }
   }
 
   private QuickStartPlan parseQuickStartPlan(String raw) {
@@ -312,6 +381,18 @@ public class GemmaRuntimeService {
       return "http://127.0.0.1:11435";
     }
     return value.endsWith("/") ? value.substring(0, value.length() - 1) : value;
+  }
+
+  private String defaultModelName(String value, String fallback) {
+    return StringUtils.hasText(value) ? value.trim() : fallback;
+  }
+
+  private String normalizeFallbackModel(String value, String primary) {
+    if (!StringUtils.hasText(value)) {
+      return null;
+    }
+    String normalized = value.trim();
+    return normalized.equals(primary) ? null : normalized;
   }
 
   private String asString(Object value) {
