@@ -24,7 +24,7 @@ class WebConfig:
     workdir: Path
     default_review_enabled: bool = False
     ollama_url: str = "http://127.0.0.1:11434"
-    ollama_model: str = "gemma4:31b-tuned"
+    ollama_model: str = "gemma4:26b"
     review_timeout_seconds: int = 240
 
 

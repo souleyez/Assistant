@@ -23,7 +23,7 @@ python -m rknn_package_converter build .\tools\rknn-package-converter\manifest.e
 If you want Gemma 4 to review the generated package structure through local Ollama:
 
 ```powershell
-python -m rknn_package_converter build .\tools\rknn-package-converter\manifest.example.json --review --ollama-url http://127.0.0.1:11435 --ollama-model gemma4:31b-tuned
+python -m rknn_package_converter build .\tools\rknn-package-converter\manifest.example.json --review --ollama-url http://127.0.0.1:11435 --ollama-model gemma4:26b
 ```
 
 The build command still writes the package even if the review call fails. In that case `gemma-review.json` records the error.
@@ -31,7 +31,7 @@ The build command still writes the package even if the review call fails. In tha
 ## Start The Standalone Web Form
 
 ```powershell
-python -m rknn_package_converter serve --host 0.0.0.0 --port 4174 --workdir .\tools\rknn-package-converter\runtime --enable-review --ollama-url http://127.0.0.1:11435 --ollama-model gemma4:31b-tuned
+python -m rknn_package_converter serve --host 0.0.0.0 --port 4174 --workdir .\tools\rknn-package-converter\runtime --enable-review --ollama-url http://127.0.0.1:11435 --ollama-model gemma4:26b
 ```
 
 Then open `http://127.0.0.1:4174`.

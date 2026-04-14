@@ -13,7 +13,7 @@ import urllib.request
 class ReviewConfig:
     enabled: bool = False
     ollama_url: str = "http://127.0.0.1:11434"
-    model: str = "gemma4:31b-tuned"
+    model: str = "gemma4:26b"
     timeout_seconds: int = 240
 
     def normalized_url(self) -> str:

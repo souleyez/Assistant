@@ -57,7 +57,7 @@ def create_parser() -> argparse.ArgumentParser:
     )
     build_parser.add_argument(
         "--ollama-model",
-        default="gemma4:31b-tuned",
+        default="gemma4:26b",
         help="Ollama model name used for review.",
     )
     build_parser.add_argument(
@@ -88,7 +88,7 @@ def create_parser() -> argparse.ArgumentParser:
     )
     serve_parser.add_argument(
         "--ollama-model",
-        default="gemma4:31b-tuned",
+        default="gemma4:26b",
         help="Default Ollama model name for review.",
     )
     serve_parser.add_argument(
