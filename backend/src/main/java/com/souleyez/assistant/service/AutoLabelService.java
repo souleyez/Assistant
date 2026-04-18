@@ -185,10 +185,12 @@ public class AutoLabelService {
                                               String effectivePython,
                                               Path scriptPath,
                                               Path manifestPath) throws IOException, InterruptedException {
+    Path effectiveScriptPath = scriptPath.toAbsolutePath().normalize();
+    Path effectiveManifestPath = manifestPath.toAbsolutePath().normalize();
     ProcessBuilder builder = new ProcessBuilder(
         effectivePython,
-        scriptPath.toString(),
-        manifestPath.toString()
+        effectiveScriptPath.toString(),
+        effectiveManifestPath.toString()
     );
     builder.directory(workspaceRoot.toFile());
     builder.redirectErrorStream(true);
