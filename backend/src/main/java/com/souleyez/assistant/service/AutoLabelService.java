@@ -92,25 +92,20 @@ public class AutoLabelService {
       writeManifest(manifestPath, reportPath, datasetRoot, classNames, detectionPrompts, imageSize);
 
       String effectivePython = resolvePythonCommand(workspaceRoot);
-      ProcessBuilder builder = new ProcessBuilder(
-          effectivePython,
-          scriptPath.toString(),
-          manifestPath.toString()
-      );
-      builder.directory(workspaceRoot.toFile());
-      builder.redirectErrorStream(true);
-      Process process = builder.start();
-
-      String output = readProcessOutput(process.getInputStream());
-      int exitCode = process.waitFor();
+      RunnerExecution execution = runAutoLabelProcess(workspaceRoot, effectivePython, scriptPath, manifestPath);
       AutoLabelReport report = readReport(reportPath);
-      report.setEnabled(true);
-      if (StringUtils.hasText(output)) {
-        report.setProcessOutput(output.trim());
+      if (shouldRetryBootstrap(execution, report)) {
+        Files.deleteIfExists(reportPath);
+        execution = runAutoLabelProcess(workspaceRoot, effectivePython, scriptPath, manifestPath);
+        report = readReport(reportPath);
       }
-      if (exitCode != 0 && !StringUtils.hasText(report.getMessage())) {
+      report.setEnabled(true);
+      if (StringUtils.hasText(execution.getOutput())) {
+        report.setProcessOutput(execution.getOutput().trim());
+      }
+      if (execution.getExitCode() != 0 && !StringUtils.hasText(report.getMessage())) {
         report.setStatus("failed");
-        report.setMessage(output.trim());
+        report.setMessage(execution.getOutput().trim());
       }
       return report;
     } catch (InterruptedException exception) {
@@ -184,6 +179,35 @@ public class AutoLabelService {
       return report;
     }
     return objectMapper.readValue(reportPath.toFile(), new TypeReference<AutoLabelReport>() { });
+  }
+
+  private RunnerExecution runAutoLabelProcess(Path workspaceRoot,
+                                              String effectivePython,
+                                              Path scriptPath,
+                                              Path manifestPath) throws IOException, InterruptedException {
+    ProcessBuilder builder = new ProcessBuilder(
+        effectivePython,
+        scriptPath.toString(),
+        manifestPath.toString()
+    );
+    builder.directory(workspaceRoot.toFile());
+    builder.redirectErrorStream(true);
+    Process process = builder.start();
+    String output = readProcessOutput(process.getInputStream());
+    int exitCode = process.waitFor();
+    return new RunnerExecution(exitCode, output);
+  }
+
+  private boolean shouldRetryBootstrap(RunnerExecution execution, AutoLabelReport report) {
+    String combined = defaultText(execution.getOutput(), "") + "\n" + defaultText(report.getMessage(), "");
+    String normalized = combined.toLowerCase(Locale.ROOT);
+    if (!normalized.contains("autoupdate success")
+        && !normalized.contains("restart runtime or rerun command")) {
+      return false;
+    }
+    return execution.getExitCode() != 0
+        || "failed".equals(report.getStatus())
+        || !StringUtils.hasText(report.getModel());
   }
 
   private void writeAutoLabelScript(Path scriptPath) throws IOException {
@@ -506,6 +530,24 @@ public class AutoLabelService {
       }
       double covered = existingLabelCount + createdLabelCount;
       return covered / totalImageCount;
+    }
+  }
+
+  private static class RunnerExecution {
+    private final int exitCode;
+    private final String output;
+
+    private RunnerExecution(int exitCode, String output) {
+      this.exitCode = exitCode;
+      this.output = output;
+    }
+
+    public int getExitCode() {
+      return exitCode;
+    }
+
+    public String getOutput() {
+      return output;
     }
   }
 }

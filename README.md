@@ -79,8 +79,10 @@ mvn spring-boot:run
 建议先准备一个单独的 Python 环境，并安装：
 
 ```powershell
-pip install ultralytics
+pip install -r requirements-train.txt
 ```
+
+`requirements-train.txt` 里除了 `ultralytics`，还会提前安装 `YOLOWorld` 依赖的 `CLIP`。这样首次走自动预标注时不会因为运行时补依赖而失败。
 
 如果 `python` 不是你想用的解释器，可以在启动后端前指定：
 
@@ -115,7 +117,7 @@ bash deploy/linux/setup-server.sh
 
 这套脚本会做这些事情：
 
-- 在项目根目录创建 `.venv`，并安装 `ultralytics`
+- 在项目根目录创建 `.venv`，并安装训练与自动预标注依赖
 - 构建前端 `dist`
 - 打包后端 jar
 - 以用户态后台进程启动前后端
