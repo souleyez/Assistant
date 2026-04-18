@@ -28,10 +28,14 @@ public class QuickStartService {
   private final Path quickStartRoot = Paths.get("data", "runtime", "quick-start");
   private final AppStateStore store;
   private final GemmaRuntimeService gemmaRuntimeService;
+  private final AutoLabelService autoLabelService;
 
-  public QuickStartService(AppStateStore store, GemmaRuntimeService gemmaRuntimeService) {
+  public QuickStartService(AppStateStore store,
+                           GemmaRuntimeService gemmaRuntimeService,
+                           AutoLabelService autoLabelService) {
     this.store = store;
     this.gemmaRuntimeService = gemmaRuntimeService;
+    this.autoLabelService = autoLabelService;
   }
 
   public Map<String, Object> summary() {
@@ -40,6 +44,9 @@ public class QuickStartService {
     runtime.put("gemmaModel", gemmaRuntimeService.getConfiguredModel());
     runtime.put("accepts", new String[] {"zip", "jpg", "jpeg", "png", "webp", "bmp"});
     runtime.put("autoStartWhenLabeled", Boolean.TRUE);
+    runtime.put("autoLabelEnabled", autoLabelService.isEnabled());
+    runtime.put("autoLabelModel", autoLabelService.getConfiguredModel());
+    runtime.put("autoLabelConfidence", autoLabelService.getConfThreshold());
     runtime.put("storageRoot", quickStartRoot.toString());
 
     Map<String, Object> response = new LinkedHashMap<String, Object>();
@@ -69,29 +76,42 @@ public class QuickStartService {
 
     materializeUploads(files, incomingRoot, extractedRoot);
 
-    DatasetScan scan = inspectUploads(extractedRoot, datasetRoot);
-    if (scan.getImageCount() == 0) {
+    DatasetScan initialScan = inspectUploads(extractedRoot, datasetRoot);
+    if (initialScan.getImageCount() == 0) {
       throw new IllegalArgumentException("未识别到图片文件，支持 zip 或 jpg/png/webp/bmp。");
     }
 
     GemmaRuntimeService.QuickStartPlan plan = gemmaRuntimeService.planQuickStart(
         targetDescription,
-        scan.getImageCount(),
-        scan.getLabeledImageCount(),
-        scan.getSampleNames()
+        initialScan.getImageCount(),
+        initialScan.getLabeledImageCount(),
+        initialScan.getSampleNames()
     );
+
+    AutoLabelService.AutoLabelReport autoLabelReport = null;
+    DatasetScan effectiveScan = initialScan;
+    if (!initialScan.isReadyForTraining()) {
+      autoLabelReport = autoLabelService.autoLabel(
+          runRoot,
+          initialScan.getDatasetPath(),
+          plan.getClassNames(),
+          plan.getDetectionPrompts(),
+          plan.getImageSize()
+      );
+      effectiveScan = scanPreparedDataset(initialScan.getDatasetPath());
+    }
 
     AppState.Dataset datasetRequest = new AppState.Dataset();
     datasetRequest.setName(plan.getDatasetName());
     datasetRequest.setTaskType("object-detection");
-    datasetRequest.setStoragePath(scan.getDatasetPath().toString());
-    datasetRequest.setImageCount(scan.getImageCount());
+    datasetRequest.setStoragePath(effectiveScan.getDatasetPath().toString());
+    datasetRequest.setImageCount(effectiveScan.getImageCount());
     datasetRequest.setClassCount(plan.getClassNames().size());
     datasetRequest.setVersion(1);
     datasetRequest.setLabelFormat("yolo");
     datasetRequest.setSplitStrategy("80/10/10");
-    datasetRequest.setStatus(scan.isReadyForTraining() ? "ready" : "reviewing");
-    datasetRequest.setNotes(buildDatasetNotes(targetDescription, scan, plan));
+    datasetRequest.setStatus(effectiveScan.isReadyForTraining() ? "ready" : "reviewing");
+    datasetRequest.setNotes(buildDatasetNotes(targetDescription, initialScan, effectiveScan, plan, autoLabelReport));
     datasetRequest.setClassNames(plan.getClassNames());
     AppState.Dataset dataset = store.createDataset(datasetRequest);
 
@@ -104,22 +124,20 @@ public class QuickStartService {
     projectRequest.setEpochs(plan.getEpochs());
     projectRequest.setBatchSize(plan.getBatchSize());
     projectRequest.setOptimizer(plan.getOptimizer());
-    projectRequest.setStatus(scan.isReadyForTraining() ? "draft" : "reviewing");
+    projectRequest.setStatus(effectiveScan.isReadyForTraining() ? "draft" : "reviewing");
     projectRequest.setOwner("quick-start");
     AppState.TrainingProject project = store.createProject(projectRequest);
 
     AppState.TrainingJob job = null;
-    String warning = null;
+    String warning = buildWarning(initialScan, effectiveScan, autoLabelReport);
     boolean autoStarted = false;
-    if (scan.isReadyForTraining() && autoStart) {
+    if (effectiveScan.isReadyForTraining() && autoStart) {
       try {
         job = store.startJob(project.getId());
         autoStarted = true;
       } catch (IOException launchError) {
         warning = "项目已创建，但训练任务未能自动启动: " + launchError.getMessage();
       }
-    } else if (!scan.isReadyForTraining()) {
-      warning = "当前只检测到图片或部分标注，已先创建数据集和项目，补齐 YOLO 标签后再开训。";
     }
 
     AppState.QuickStartSession session = new AppState.QuickStartSession();
@@ -130,17 +148,23 @@ public class QuickStartService {
     session.setProjectId(project.getId());
     session.setProjectName(project.getName());
     session.setJobId(job == null ? null : job.getId());
-    session.setUploadPath(scan.getDatasetPath().toString());
-    session.setImageCount(scan.getImageCount());
-    session.setLabeledImageCount(scan.getLabeledImageCount());
-    session.setReadyForTraining(scan.isReadyForTraining());
+    session.setUploadPath(effectiveScan.getDatasetPath().toString());
+    session.setImageCount(effectiveScan.getImageCount());
+    session.setLabeledImageCount(effectiveScan.getLabeledImageCount());
+    session.setReadyForTraining(effectiveScan.isReadyForTraining());
     session.setAutoStarted(autoStarted);
-    session.setStatus(resolveStatus(scan.isReadyForTraining(), autoStarted, job, warning));
+    session.setStatus(resolveStatus(effectiveScan.isReadyForTraining(), autoStarted, job, autoLabelReport, warning));
     session.setObjective(project.getObjective());
     session.setWarning(warning);
-    session.setNextAction(buildNextAction(scan.isReadyForTraining(), autoStarted));
+    session.setNextAction(buildNextAction(effectiveScan.isReadyForTraining(), autoStarted, autoLabelReport));
     session.setGemmaSummary(plan.getSummary());
     session.setSuggestedClasses(new ArrayList<String>(plan.getClassNames()));
+    session.setAutoLabelStatus(autoLabelReport == null ? null : autoLabelReport.getStatus());
+    session.setAutoLabelModel(autoLabelReport == null ? null : autoLabelReport.getModel());
+    session.setAutoLabelCreatedCount(autoLabelReport == null ? 0 : autoLabelReport.getCreatedLabelCount());
+    session.setAutoLabelRemainingCount(autoLabelReport == null ? 0 : autoLabelReport.getRemainingImageCount());
+    session.setAutoLabelCoverage(autoLabelReport == null ? 0.0d : roundCoverage(autoLabelReport.coverage()));
+    session.setAutoLabelMessage(autoLabelReport == null ? null : autoLabelReport.getMessage());
     session.setCreatedAt(Instant.now().toString());
     store.recordQuickStart(session);
 
@@ -260,6 +284,12 @@ public class QuickStartService {
     return labeled;
   }
 
+  private DatasetScan scanPreparedDataset(Path datasetRoot) throws IOException {
+    List<Path> images = collectImages(datasetRoot);
+    int labeledImageCount = countStructuredLabels(datasetRoot, images);
+    return new DatasetScan(datasetRoot, images.size(), labeledImageCount, sampleNames(images));
+  }
+
   private List<String> sampleNames(List<Path> images) {
     List<String> samples = new ArrayList<String>();
     for (Path image : images) {
@@ -323,12 +353,36 @@ public class QuickStartService {
   }
 
   private String buildDatasetNotes(String targetDescription,
-                                   DatasetScan scan,
-                                   GemmaRuntimeService.QuickStartPlan plan) {
+                                   DatasetScan initialScan,
+                                   DatasetScan effectiveScan,
+                                   GemmaRuntimeService.QuickStartPlan plan,
+                                   AutoLabelService.AutoLabelReport autoLabelReport) {
     StringBuilder notes = new StringBuilder();
     notes.append("Quick Start 目标: ").append(targetDescription).append('\n');
     notes.append("Gemma 解析类别: ").append(plan.getClassNames()).append('\n');
-    notes.append("图片/标注: ").append(scan.getImageCount()).append('/').append(scan.getLabeledImageCount()).append('\n');
+    notes.append("Gemma 检测提示: ").append(plan.getDetectionPrompts()).append('\n');
+    notes.append("初始图片/标注: ")
+        .append(initialScan.getImageCount())
+        .append('/')
+        .append(initialScan.getLabeledImageCount())
+        .append('\n');
+    notes.append("当前图片/标注: ")
+        .append(effectiveScan.getImageCount())
+        .append('/')
+        .append(effectiveScan.getLabeledImageCount())
+        .append('\n');
+    if (autoLabelReport != null) {
+      notes.append("自动预标注: ")
+          .append(defaultText(autoLabelReport.getStatus(), "unknown"))
+          .append(" · model=")
+          .append(defaultText(autoLabelReport.getModel(), "n/a"))
+          .append(" · created=")
+          .append(autoLabelReport.getCreatedLabelCount())
+          .append(" · remaining=")
+          .append(autoLabelReport.getRemainingImageCount())
+          .append('\n');
+      notes.append("自动预标注说明: ").append(defaultText(autoLabelReport.getMessage(), "")).append('\n');
+    }
     notes.append(plan.getSummary());
     return notes.toString();
   }
@@ -336,6 +390,7 @@ public class QuickStartService {
   private String resolveStatus(boolean readyForTraining,
                                boolean autoStarted,
                                AppState.TrainingJob job,
+                               AutoLabelService.AutoLabelReport autoLabelReport,
                                String warning) {
     if (autoStarted && job != null) {
       return job.getStatus();
@@ -343,17 +398,80 @@ public class QuickStartService {
     if (readyForTraining) {
       return StringUtils.hasText(warning) ? "prepared" : "ready";
     }
+    if (autoLabelReport != null && StringUtils.hasText(autoLabelReport.getStatus())) {
+      return "auto-label-" + autoLabelReport.getStatus();
+    }
     return "awaiting-labels";
   }
 
-  private String buildNextAction(boolean readyForTraining, boolean autoStarted) {
+  private String buildNextAction(boolean readyForTraining,
+                                 boolean autoStarted,
+                                 AutoLabelService.AutoLabelReport autoLabelReport) {
     if (autoStarted) {
       return "训练任务已自动创建，直接去训练任务页查看日志和进度。";
     }
     if (readyForTraining) {
+      if (autoLabelReport != null && autoLabelReport.getCreatedLabelCount() > 0) {
+        return "系统已经自动补齐缺失标签，建议先抽检一轮标注，再直接开训。";
+      }
       return "数据集和项目已创建完成，去训练任务页点一次开始训练即可。";
     }
+    if (autoLabelReport != null) {
+      if ("partial".equals(autoLabelReport.getStatus())) {
+        return "系统已自动预标注一部分图片，先复核剩余未覆盖样本，再从训练任务页开训。";
+      }
+      if ("empty".equals(autoLabelReport.getStatus())) {
+        return "自动预标注没有产出可靠框，建议先人工补一批 YOLO 标签，再继续训练。";
+      }
+      if ("failed".equals(autoLabelReport.getStatus())) {
+        return "自动预标注执行失败，建议检查 YOLOWorld 权重和 Python 环境，然后补齐标签后再开训。";
+      }
+    }
     return "系统已经建好数据集目录和训练项目，先补齐 YOLO 标签文件，再从训练任务页开训。";
+  }
+
+  private String buildWarning(DatasetScan initialScan,
+                              DatasetScan effectiveScan,
+                              AutoLabelService.AutoLabelReport autoLabelReport) {
+    if (effectiveScan.isReadyForTraining()) {
+      if (autoLabelReport != null && autoLabelReport.getCreatedLabelCount() > 0) {
+        return "系统已自动补齐缺失 YOLO 标签，建议先抽检再进入训练。";
+      }
+      return null;
+    }
+    if (autoLabelReport == null) {
+      return "当前只检测到图片或部分标注，已先创建数据集和项目，补齐 YOLO 标签后再开训。";
+    }
+    if ("partial".equals(autoLabelReport.getStatus())) {
+      return "已自动预标注 "
+          + autoLabelReport.getCreatedLabelCount()
+          + " 张，当前总标注覆盖 "
+          + effectiveScan.getLabeledImageCount()
+          + "/"
+          + effectiveScan.getImageCount()
+          + "，剩余样本需要复核或手工补框。";
+    }
+    if ("empty".equals(autoLabelReport.getStatus())) {
+      return "系统已尝试自动预标注，但没有生成可靠检测框，当前仍需人工补齐 YOLO 标签。";
+    }
+    if ("failed".equals(autoLabelReport.getStatus())) {
+      return "自动预标注失败: " + defaultText(autoLabelReport.getMessage(), "unknown error");
+    }
+    if ("missing-prompts".equals(autoLabelReport.getStatus())) {
+      return "当前没有可用于自动预标注的检测提示词，系统已先创建数据集和项目。";
+    }
+    if (initialScan.getLabeledImageCount() < initialScan.getImageCount()) {
+      return "当前只检测到图片或部分标注，已先创建数据集和项目，补齐 YOLO 标签后再开训。";
+    }
+    return null;
+  }
+
+  private String defaultText(String value, String fallback) {
+    return StringUtils.hasText(value) ? value : fallback;
+  }
+
+  private double roundCoverage(double value) {
+    return Math.round(value * 1000.0d) / 1000.0d;
   }
 
   private static class DatasetScan {

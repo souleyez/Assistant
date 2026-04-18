@@ -199,6 +199,7 @@ public class GemmaRuntimeService {
         plan.setEpochs(asInt(generic.get("epochs"), 120));
         plan.setBatchSize(asInt(generic.get("batchSize"), 16));
         plan.setClassNames(extractStringList(generic.get("classNames")));
+        plan.setDetectionPrompts(extractStringList(generic.get("detectionPrompts")));
         return plan;
       } catch (IOException secondaryError) {
         throw new IllegalStateException("Failed to parse Gemma quick-start plan", secondaryError);
@@ -212,6 +213,7 @@ public class GemmaRuntimeService {
                                        int labeledImageCount) {
     QuickStartPlan normalized = new QuickStartPlan();
     normalized.setClassNames(normalizeClassNames(plan.getClassNames(), targetDescription));
+    normalized.setDetectionPrompts(normalizeDetectionPrompts(plan.getDetectionPrompts(), normalized.getClassNames()));
     normalized.setDatasetName(defaultText(plan.getDatasetName(), buildName(normalized.getClassNames(), "dataset")));
     normalized.setProjectName(defaultText(plan.getProjectName(), buildName(normalized.getClassNames(), "project")));
     normalized.setObjective(defaultText(plan.getObjective(), buildObjective(targetDescription)));
@@ -228,6 +230,7 @@ public class GemmaRuntimeService {
     QuickStartPlan plan = new QuickStartPlan();
     List<String> classes = extractClasses(targetDescription);
     plan.setClassNames(classes);
+    plan.setDetectionPrompts(new ArrayList<String>(classes));
     plan.setDatasetName(buildName(classes, "dataset"));
     plan.setProjectName(buildName(classes, "project"));
     plan.setObjective(buildObjective(targetDescription));
@@ -254,6 +257,7 @@ public class GemmaRuntimeService {
         + "  \"objective\": \"\",\n"
         + "  \"summary\": \"\",\n"
         + "  \"classNames\": [\"\"],\n"
+        + "  \"detectionPrompts\": [\"\"],\n"
         + "  \"yoloVersion\": \"YOLOv11m\",\n"
         + "  \"imageSize\": 640,\n"
         + "  \"epochs\": 120,\n"
@@ -261,11 +265,12 @@ public class GemmaRuntimeService {
         + "  \"optimizer\": \"SGD\"\n"
         + "}\n"
         + "规则:\n"
-        + "1. classNames 只保留 1 到 4 个真正需要检测的类别名。\n"
-        + "2. datasetName 和 projectName 要简短明确。\n"
-        + "3. objective 要直接说明训练目标。\n"
-        + "4. summary 要告诉用户当前数据是否适合直接开训。\n"
-        + "5. 如果图片没有完整标注，要在 summary 中直接说需要补标注。\n\n"
+        + "1. classNames 只保留 1 到 4 个真正需要检测的类别名，可用中文。\n"
+        + "2. detectionPrompts 必须与 classNames 一一对应，输出适合开放词汇检测的英文短语。\n"
+        + "3. datasetName 和 projectName 要简短明确。\n"
+        + "4. objective 要直接说明训练目标。\n"
+        + "5. summary 要告诉用户当前数据是否适合直接开训。\n"
+        + "6. 如果图片没有完整标注，要在 summary 中直接说需要补标注。\n\n"
         + "用户描述: " + targetDescription + "\n"
         + "图片数量: " + imageCount + "\n"
         + "已发现标注数量: " + labeledImageCount + "\n"
@@ -342,6 +347,27 @@ public class GemmaRuntimeService {
       normalized = normalized.subList(0, 4);
     }
     return normalized;
+  }
+
+  private List<String> normalizeDetectionPrompts(List<String> prompts, List<String> classNames) {
+    List<String> normalized = new ArrayList<String>();
+    if (prompts != null) {
+      for (String item : prompts) {
+        if (StringUtils.hasText(item)) {
+          normalized.add(item.trim());
+        }
+      }
+    }
+    if (normalized.isEmpty()) {
+      normalized.addAll(classNames);
+    }
+    while (normalized.size() < classNames.size()) {
+      normalized.add(classNames.get(normalized.size()));
+    }
+    if (normalized.size() > classNames.size()) {
+      normalized = normalized.subList(0, classNames.size());
+    }
+    return new ArrayList<String>(normalized);
   }
 
   private String buildName(List<String> classes, String suffix) {
@@ -432,6 +458,7 @@ public class GemmaRuntimeService {
     private String objective;
     private String summary;
     private List<String> classNames = new ArrayList<String>();
+    private List<String> detectionPrompts = new ArrayList<String>();
     private String yoloVersion;
     private int imageSize;
     private int epochs;
@@ -476,6 +503,14 @@ public class GemmaRuntimeService {
 
     public void setClassNames(List<String> classNames) {
       this.classNames = classNames;
+    }
+
+    public List<String> getDetectionPrompts() {
+      return detectionPrompts;
+    }
+
+    public void setDetectionPrompts(List<String> detectionPrompts) {
+      this.detectionPrompts = detectionPrompts;
     }
 
     public String getYoloVersion() {

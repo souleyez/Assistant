@@ -3,7 +3,7 @@
     <PageHeader
       eyebrow="Quick Start"
       title="上传图片，一句话开训"
-      description="最简路径：上传图片或 zip，写一句要抓什么。系统会用 Gemma 4 理解目标，自动建数据集和训练项目；如果检测到完整 YOLO 标注，还会直接进入训练。"
+      description="最简路径：上传图片或 zip，写一句要抓什么。系统会用 Gemma 4 理解目标，先尝试自动预标注，再自动建数据集和训练项目；标注覆盖完整时会直接进入训练。"
     />
 
     <section class="content-grid quickstart-grid">
@@ -29,7 +29,7 @@
               accept=".zip,.jpg,.jpeg,.png,.webp,.bmp,.txt"
               @change="handleFiles"
             />
-            <small class="table-subtle">支持 zip、图片；如果同时带上 YOLO `.txt` 标注，系统会尝试直接开训。</small>
+            <small class="table-subtle">支持 zip、图片；如果同时带上 YOLO `.txt` 标注会优先复用，缺失部分则交给自动预标注补齐。</small>
           </label>
 
           <div v-if="selectedFiles.length" class="upload-summary">
@@ -81,6 +81,13 @@
             </div>
             <span class="chip">{{ runtime.autoStartWhenLabeled ? 'guarded' : 'off' }}</span>
           </div>
+          <div class="list-row">
+            <div>
+              <strong>自动预标注</strong>
+              <p>{{ runtime.autoLabelModel || 'YOLOWorld' }} · conf {{ runtime.autoLabelConfidence ?? 0.2 }}</p>
+            </div>
+            <span class="chip">{{ runtime.autoLabelEnabled ? 'enabled' : 'off' }}</span>
+          </div>
         </div>
       </article>
     </section>
@@ -114,6 +121,13 @@
               </div>
               <span class="chip">{{ lastResult.item.imageCount }} img / {{ lastResult.item.labeledImageCount }} label</span>
             </div>
+            <div class="list-row" v-if="lastResult.item.autoLabelStatus">
+              <div>
+                <strong>自动预标注</strong>
+                <p>{{ lastResult.item.autoLabelModel || 'YOLOWorld' }} · +{{ lastResult.item.autoLabelCreatedCount }} / 剩余 {{ lastResult.item.autoLabelRemainingCount }}</p>
+              </div>
+              <span class="chip">{{ lastResult.item.autoLabelStatus }}</span>
+            </div>
             <div class="list-row">
               <div>
                 <strong>训练项目</strong>
@@ -135,6 +149,7 @@
       <div class="panel note-panel" v-if="lastResult.item.warning || lastResult.item.nextAction">
         <p class="eyebrow">Next Action</p>
         <p class="page-copy">{{ lastResult.item.warning || lastResult.item.nextAction }}</p>
+        <p v-if="lastResult.item.autoLabelMessage" class="table-subtle">{{ lastResult.item.autoLabelMessage }}</p>
       </div>
 
       <div class="form-actions">
@@ -157,9 +172,11 @@
           <div class="chip-row">
             <span class="chip">{{ item.imageCount }} 图片</span>
             <span class="chip">{{ item.labeledImageCount }} 标注</span>
+            <span v-if="item.autoLabelStatus" class="chip">auto {{ item.autoLabelStatus }}</span>
+            <span v-if="item.autoLabelCreatedCount" class="chip">+{{ item.autoLabelCreatedCount }}</span>
             <span v-for="name in item.suggestedClasses" :key="`${item.id}-${name}`" class="chip">{{ name }}</span>
           </div>
-          <p class="table-subtle">{{ item.nextAction }}</p>
+          <p class="table-subtle">{{ item.autoLabelMessage || item.nextAction }}</p>
         </article>
       </div>
       <EmptyState v-else title="暂无一键开训记录" text="上传第一批图片后，这里会显示最近的 Quick Start。" />
@@ -184,6 +201,9 @@ const runtime = ref({
   gemmaModel: '',
   accepts: [],
   autoStartWhenLabeled: true,
+  autoLabelEnabled: true,
+  autoLabelModel: '',
+  autoLabelConfidence: 0.2,
 })
 const selectedFiles = ref([])
 const targetDescription = ref('')
@@ -243,9 +263,15 @@ async function submitQuickStart() {
     })
     lastResult.value = response
     await loadQuickStarts()
-    message.value = response.job
-      ? 'Gemma 已完成解析，训练任务已自动创建。'
-      : 'Gemma 已完成解析，数据集和项目已自动建立。'
+    if (response.job) {
+      message.value = 'Gemma 解析和自动预标注已完成，训练任务已自动创建。'
+    } else if (response.item?.autoLabelStatus === 'partial') {
+      message.value = 'Gemma 解析完成，系统已自动预标注一部分图片，剩余样本待复核。'
+    } else if (response.item?.autoLabelStatus) {
+      message.value = 'Gemma 解析和自动预标注已完成，数据集和项目已自动建立。'
+    } else {
+      message.value = 'Gemma 已完成解析，数据集和项目已自动建立。'
+    }
     clearForm()
   } catch (err) {
     error.value = err instanceof Error ? err.message : 'Quick Start 失败'

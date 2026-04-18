@@ -948,6 +948,12 @@ public class AppState {
     private String nextAction;
     private String gemmaSummary;
     private List<String> suggestedClasses = new ArrayList<String>();
+    private String autoLabelStatus;
+    private String autoLabelModel;
+    private int autoLabelCreatedCount;
+    private int autoLabelRemainingCount;
+    private double autoLabelCoverage;
+    private String autoLabelMessage;
     private String createdAt;
 
     public String getId() {
@@ -1092,6 +1098,54 @@ public class AppState {
 
     public void setSuggestedClasses(List<String> suggestedClasses) {
       this.suggestedClasses = suggestedClasses;
+    }
+
+    public String getAutoLabelStatus() {
+      return autoLabelStatus;
+    }
+
+    public void setAutoLabelStatus(String autoLabelStatus) {
+      this.autoLabelStatus = autoLabelStatus;
+    }
+
+    public String getAutoLabelModel() {
+      return autoLabelModel;
+    }
+
+    public void setAutoLabelModel(String autoLabelModel) {
+      this.autoLabelModel = autoLabelModel;
+    }
+
+    public int getAutoLabelCreatedCount() {
+      return autoLabelCreatedCount;
+    }
+
+    public void setAutoLabelCreatedCount(int autoLabelCreatedCount) {
+      this.autoLabelCreatedCount = autoLabelCreatedCount;
+    }
+
+    public int getAutoLabelRemainingCount() {
+      return autoLabelRemainingCount;
+    }
+
+    public void setAutoLabelRemainingCount(int autoLabelRemainingCount) {
+      this.autoLabelRemainingCount = autoLabelRemainingCount;
+    }
+
+    public double getAutoLabelCoverage() {
+      return autoLabelCoverage;
+    }
+
+    public void setAutoLabelCoverage(double autoLabelCoverage) {
+      this.autoLabelCoverage = autoLabelCoverage;
+    }
+
+    public String getAutoLabelMessage() {
+      return autoLabelMessage;
+    }
+
+    public void setAutoLabelMessage(String autoLabelMessage) {
+      this.autoLabelMessage = autoLabelMessage;
     }
 
     public String getCreatedAt() {
