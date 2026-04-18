@@ -538,7 +538,7 @@ public class AppStateStore {
                                 AppState.TrainingProject project,
                                 AppState.Dataset dataset) throws IOException {
     String projectSlug = project.getName().replaceAll("[^a-zA-Z0-9]+", "-").toLowerCase();
-    Path jobRoot = studioRoot.resolve(Paths.get("runs", projectSlug, job.getId()));
+    Path jobRoot = studioRoot.toAbsolutePath().normalize().resolve(Paths.get("runs", projectSlug, job.getId()));
     Path logsDir = jobRoot.resolve("logs");
     Path weightsDir = jobRoot.resolve("weights");
     Path manifestDir = jobRoot.resolve("manifest");
@@ -574,8 +574,9 @@ public class AppStateStore {
         classNames.add("class_" + index);
       }
     }
+    Path datasetRoot = resolveRuntimePath(dataset.getStoragePath());
     List<String> lines = new ArrayList<String>();
-    lines.add("path: " + escapeYaml(dataset.getStoragePath()));
+    lines.add("path: " + escapeYaml(datasetRoot.toString()));
     lines.add("train: train/images");
     lines.add("val: val/images");
     lines.add("test: test/images");
@@ -689,6 +690,14 @@ public class AppStateStore {
 
   private String escapeYaml(String value) {
     return "\"" + value.replace("\\", "/").replace("\"", "\\\"") + "\"";
+  }
+
+  private Path resolveRuntimePath(String value) {
+    Path path = Paths.get(value);
+    if (path.isAbsolute()) {
+      return path.normalize();
+    }
+    return path.toAbsolutePath().normalize();
   }
 
   private String normalizeForPython(String value) {

@@ -10,7 +10,9 @@ if [[ ! -x "$VENV_DIR/bin/python" ]]; then
 fi
 
 "$VENV_DIR/bin/python" -m pip install --upgrade pip
-"$VENV_DIR/bin/pip" install -r "$APP_ROOT/requirements-train.txt"
+if ! "$VENV_DIR/bin/python" -c "import ultralytics, clip" >/dev/null 2>&1; then
+  "$VENV_DIR/bin/pip" install -r "$APP_ROOT/requirements-train.txt"
+fi
 
 cd "$FRONTEND_DIR"
 if [[ ! -d node_modules ]]; then
