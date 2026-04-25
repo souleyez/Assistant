@@ -1,8 +1,12 @@
 server:
   port: 8080
+  tomcat:
+    max-swallow-size: -1
+    max-http-form-post-size: 2048MB
 
 spring:
   servlet:
     multipart:
-      max-file-size: 30MB
-      max-request-size: 30MB
+      max-file-size: 2048MB
+      max-request-size: 2048MB
+      file-size-threshold: 2MB

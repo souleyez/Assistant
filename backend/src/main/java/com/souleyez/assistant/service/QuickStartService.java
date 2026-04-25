@@ -16,16 +16,32 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.UUID;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.ThreadFactory;
 import java.util.stream.Stream;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipInputStream;
+import javax.annotation.PreDestroy;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
 import org.springframework.web.multipart.MultipartFile;
 
 @Service
 public class QuickStartService {
+  private static final Logger LOGGER = LoggerFactory.getLogger(QuickStartService.class);
   private final Path quickStartRoot = Paths.get("data", "runtime", "quick-start");
+  private final ExecutorService quickStartExecutor = Executors.newSingleThreadExecutor(new ThreadFactory() {
+    @Override
+    public Thread newThread(Runnable runnable) {
+      Thread thread = new Thread(runnable);
+      thread.setDaemon(true);
+      thread.setName("quick-start-worker");
+      return thread;
+    }
+  });
   private final AppStateStore store;
   private final GemmaRuntimeService gemmaRuntimeService;
   private final AutoLabelService autoLabelService;
@@ -36,6 +52,11 @@ public class QuickStartService {
     this.store = store;
     this.gemmaRuntimeService = gemmaRuntimeService;
     this.autoLabelService = autoLabelService;
+  }
+
+  @PreDestroy
+  public void shutdown() {
+    quickStartExecutor.shutdownNow();
   }
 
   public Map<String, Object> summary() {
@@ -81,6 +102,51 @@ public class QuickStartService {
       throw new IllegalArgumentException("未识别到图片文件，支持 zip 或 jpg/png/webp/bmp。");
     }
 
+    AppState.QuickStartSession session = buildProcessingSession(quickStartId, targetDescription, initialScan);
+    store.recordQuickStart(session);
+    LOGGER.info("Quick Start {} accepted: {} images, {} labels", quickStartId, initialScan.getImageCount(), initialScan.getLabeledImageCount());
+    enqueueQuickStartProcessing(quickStartId, targetDescription, initialScan, autoStart, runRoot, session.getCreatedAt());
+
+    Map<String, Object> response = new LinkedHashMap<String, Object>();
+    response.put("item", session);
+    response.put("dataset", null);
+    response.put("project", null);
+    response.put("job", null);
+    response.put("runtime", summary().get("runtime"));
+    return response;
+  }
+
+  private void enqueueQuickStartProcessing(final String quickStartId,
+                                           final String targetDescription,
+                                           final DatasetScan initialScan,
+                                           final boolean autoStart,
+                                           final Path runRoot,
+                                           final String createdAt) {
+    quickStartExecutor.submit(new Runnable() {
+      @Override
+      public void run() {
+        processQuickStart(quickStartId, targetDescription, initialScan, autoStart, runRoot, createdAt);
+      }
+    });
+  }
+
+  private void processQuickStart(String quickStartId,
+                                 String targetDescription,
+                                 DatasetScan initialScan,
+                                 boolean autoStart,
+                                 Path runRoot,
+                                 String createdAt) {
+    try {
+      LOGGER.info("Quick Start {} processing started", quickStartId);
+      updateQuickStartProgress(
+          quickStartId,
+          targetDescription,
+          initialScan,
+          createdAt,
+          "gemma-planning",
+          "Gemma 4 正在理解目标描述并生成训练方案。"
+      );
+
     GemmaRuntimeService.QuickStartPlan plan = gemmaRuntimeService.planQuickStart(
         targetDescription,
         initialScan.getImageCount(),
@@ -91,6 +157,14 @@ public class QuickStartService {
     AutoLabelService.AutoLabelReport autoLabelReport = null;
     DatasetScan effectiveScan = initialScan;
     if (!initialScan.isReadyForTraining()) {
+      updateQuickStartProgress(
+          quickStartId,
+          targetDescription,
+          initialScan,
+          createdAt,
+          "auto-labeling",
+          "正在按 Gemma 解析出的目标自动预标注图片。"
+      );
       autoLabelReport = autoLabelService.autoLabel(
           runRoot,
           initialScan.getDatasetPath(),
@@ -165,16 +239,81 @@ public class QuickStartService {
     session.setAutoLabelRemainingCount(autoLabelReport == null ? 0 : autoLabelReport.getRemainingImageCount());
     session.setAutoLabelCoverage(autoLabelReport == null ? 0.0d : roundCoverage(autoLabelReport.coverage()));
     session.setAutoLabelMessage(autoLabelReport == null ? null : autoLabelReport.getMessage());
-    session.setCreatedAt(Instant.now().toString());
-    store.recordQuickStart(session);
+    session.setCreatedAt(createdAt);
+    store.updateQuickStart(session);
+    LOGGER.info("Quick Start {} completed with status {}", quickStartId, session.getStatus());
+    } catch (Exception exception) {
+      LOGGER.warn("Quick Start {} failed", quickStartId, exception);
+      try {
+        AppState.QuickStartSession failed = buildFailedSession(
+            quickStartId,
+            targetDescription,
+            initialScan,
+            createdAt,
+            exception
+        );
+        store.updateQuickStart(failed);
+      } catch (IOException ignored) {
+        // best-effort async status update
+      }
+    }
+  }
 
-    Map<String, Object> response = new LinkedHashMap<String, Object>();
-    response.put("item", session);
-    response.put("dataset", dataset);
-    response.put("project", project);
-    response.put("job", job);
-    response.put("runtime", summary().get("runtime"));
-    return response;
+  private AppState.QuickStartSession buildProcessingSession(String quickStartId,
+                                                            String targetDescription,
+                                                            DatasetScan initialScan) {
+    AppState.QuickStartSession session = new AppState.QuickStartSession();
+    session.setId(quickStartId);
+    session.setTargetDescription(targetDescription);
+    session.setDatasetName("待生成数据集");
+    session.setProjectName("训练方案生成中");
+    session.setUploadPath(initialScan.getDatasetPath().toString());
+    session.setImageCount(initialScan.getImageCount());
+    session.setLabeledImageCount(initialScan.getLabeledImageCount());
+    session.setReadyForTraining(false);
+    session.setAutoStarted(false);
+    session.setStatus("processing");
+    session.setObjective(buildObjectivePreview(targetDescription));
+    session.setWarning(null);
+    session.setNextAction("上传已完成，系统正在后台解析目标、预标注并准备训练。");
+    session.setGemmaSummary("后台处理中。大批图片会继续排队处理，页面可稍后刷新查看结果。");
+    session.setSuggestedClasses(new ArrayList<String>());
+    session.setCreatedAt(Instant.now().toString());
+    return session;
+  }
+
+  private void updateQuickStartProgress(String quickStartId,
+                                        String targetDescription,
+                                        DatasetScan scan,
+                                        String createdAt,
+                                        String status,
+                                        String nextAction) throws IOException {
+    AppState.QuickStartSession session = buildProcessingSession(quickStartId, targetDescription, scan);
+    session.setCreatedAt(createdAt);
+    session.setStatus(status);
+    session.setNextAction(nextAction);
+    store.updateQuickStart(session);
+  }
+
+  private AppState.QuickStartSession buildFailedSession(String quickStartId,
+                                                        String targetDescription,
+                                                        DatasetScan scan,
+                                                        String createdAt,
+                                                        Exception exception) {
+    AppState.QuickStartSession session = buildProcessingSession(quickStartId, targetDescription, scan);
+    session.setCreatedAt(createdAt);
+    session.setStatus("failed");
+    session.setWarning("后台处理失败: " + defaultText(exception.getMessage(), exception.getClass().getSimpleName()));
+    session.setNextAction("请检查上传文件是否为图片或 YOLO 数据集 zip；如果仍失败，再查看后端日志。");
+    session.setGemmaSummary("上传已保存，但 Gemma 解析、自动预标注或项目创建阶段失败。");
+    return session;
+  }
+
+  private String buildObjectivePreview(String targetDescription) {
+    if (StringUtils.hasText(targetDescription)) {
+      return "围绕“" + targetDescription.trim() + "”生成检测训练方案。";
+    }
+    return "生成检测训练方案。";
   }
 
   private void materializeUploads(MultipartFile[] files, Path incomingRoot, Path extractedRoot) throws IOException {

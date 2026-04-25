@@ -37,6 +37,7 @@
               <span class="chip">{{ selectedFiles.length }} 个文件</span>
               <span class="chip">{{ imageFileCount }} 张图片</span>
               <span class="chip">{{ zipFileCount }} 个 zip</span>
+              <span class="chip">{{ uploadTotalSizeLabel }}</span>
             </div>
             <div class="sample-file-list">
               <span v-for="file in selectedFiles.slice(0, 8)" :key="file.name" class="sample-file-chip">{{ file.name }}</span>
@@ -50,10 +51,11 @@
 
           <div class="form-actions">
             <button class="button" :disabled="submitting || !selectedFiles.length || !targetDescription" @click="submitQuickStart">
-              {{ submitting ? 'Gemma 解析中...' : '生成训练方案' }}
+              {{ submitting ? '正在上传...' : '上传并生成训练方案' }}
             </button>
             <button class="button button-secondary" :disabled="submitting" @click="clearForm">清空</button>
           </div>
+          <small v-if="submitting" class="table-subtle">文件正在上传；上传完成后，Gemma 解析、自动预标注和训练准备会转入后台继续执行。</small>
         </div>
       </article>
 
@@ -96,7 +98,7 @@
       <div class="quickstart-result-head">
         <div>
           <p class="eyebrow">Latest Result</p>
-          <h2>{{ lastResult.item.projectName }}</h2>
+          <h2>{{ lastResult.item.projectName || '训练方案生成中' }}</h2>
           <p class="page-copy">{{ lastResult.item.objective }}</p>
         </div>
         <span class="chip">{{ lastResult.item.status }}</span>
@@ -114,12 +116,19 @@
         <article class="panel panel-flat">
           <p class="eyebrow">Execution</p>
           <div class="list-stack">
-            <div class="list-row">
+            <div class="list-row" v-if="lastResult.dataset">
               <div>
                 <strong>数据集</strong>
                 <p>{{ lastResult.dataset.name }}</p>
               </div>
               <span class="chip">{{ lastResult.item.imageCount }} img / {{ lastResult.item.labeledImageCount }} label</span>
+            </div>
+            <div class="list-row" v-else>
+              <div>
+                <strong>{{ lastResult.item.datasetId ? '数据集' : '处理状态' }}</strong>
+                <p>{{ lastResult.item.datasetId ? lastResult.item.datasetName : lastResult.item.nextAction }}</p>
+              </div>
+              <span class="chip">{{ lastResult.item.imageCount }} 图片</span>
             </div>
             <div class="list-row" v-if="lastResult.item.autoLabelStatus">
               <div>
@@ -128,12 +137,19 @@
               </div>
               <span class="chip">{{ lastResult.item.autoLabelStatus }}</span>
             </div>
-            <div class="list-row">
+            <div class="list-row" v-if="lastResult.project">
               <div>
                 <strong>训练项目</strong>
                 <p>{{ lastResult.project.yoloVersion }} · {{ lastResult.project.epochs }}e · b{{ lastResult.project.batchSize }}</p>
               </div>
               <span class="chip">{{ lastResult.project.status }}</span>
+            </div>
+            <div class="list-row" v-else-if="lastResult.item.projectId">
+              <div>
+                <strong>训练项目</strong>
+                <p>{{ lastResult.item.projectName }}</p>
+              </div>
+              <span class="chip">{{ lastResult.item.status }}</span>
             </div>
             <div class="list-row" v-if="lastResult.job">
               <div>
@@ -188,7 +204,7 @@
 </template>
 
 <script setup>
-import { computed, onMounted, ref } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { RouterLink } from 'vue-router'
 import { request } from '../api'
 import EmptyState from '../components/EmptyState.vue'
@@ -212,6 +228,7 @@ const submitting = ref(false)
 const message = ref('')
 const error = ref('')
 const lastResult = ref(null)
+const pollTimer = ref(null)
 
 const imageFileCount = computed(() =>
   selectedFiles.value.filter((file) => /\.(jpg|jpeg|png|webp|bmp)$/i.test(file.name)).length
@@ -219,6 +236,10 @@ const imageFileCount = computed(() =>
 const zipFileCount = computed(() =>
   selectedFiles.value.filter((file) => /\.zip$/i.test(file.name)).length
 )
+const uploadTotalSize = computed(() =>
+  selectedFiles.value.reduce((total, file) => total + (file.size || 0), 0)
+)
+const uploadTotalSizeLabel = computed(() => formatBytes(uploadTotalSize.value))
 
 function formatTime(value) {
   return new Intl.DateTimeFormat('zh-CN', {
@@ -227,6 +248,20 @@ function formatTime(value) {
     hour: '2-digit',
     minute: '2-digit',
   }).format(new Date(value))
+}
+
+function formatBytes(bytes) {
+  if (!bytes) {
+    return '0 B'
+  }
+  const units = ['B', 'KB', 'MB', 'GB']
+  let value = bytes
+  let index = 0
+  while (value >= 1024 && index < units.length - 1) {
+    value /= 1024
+    index += 1
+  }
+  return `${value.toFixed(value >= 10 || index === 0 ? 0 : 1)} ${units[index]}`
 }
 
 function handleFiles(event) {
@@ -246,6 +281,20 @@ async function loadQuickStarts() {
   const response = await request('/api/quick-start')
   items.value = response.items || []
   runtime.value = response.runtime || runtime.value
+  syncLastResultFromItems()
+}
+
+function syncLastResultFromItems() {
+  if (!lastResult.value?.item?.id) {
+    return
+  }
+  const latest = items.value.find((item) => item.id === lastResult.value.item.id)
+  if (latest) {
+    lastResult.value = {
+      ...lastResult.value,
+      item: latest,
+    }
+  }
 }
 
 async function submitQuickStart() {
@@ -263,7 +312,9 @@ async function submitQuickStart() {
     })
     lastResult.value = response
     await loadQuickStarts()
-    if (response.job) {
+    if (['processing', 'gemma-planning', 'auto-labeling'].includes(response.item?.status)) {
+      message.value = '上传已接收，系统正在后台解析目标、自动预标注并准备训练；页面会自动刷新状态。'
+    } else if (response.job) {
       message.value = 'Gemma 解析和自动预标注已完成，训练任务已自动创建。'
     } else if (response.item?.autoLabelStatus === 'partial') {
       message.value = 'Gemma 解析完成，系统已自动预标注一部分图片，剩余样本待复核。'
@@ -280,5 +331,14 @@ async function submitQuickStart() {
   }
 }
 
-onMounted(loadQuickStarts)
+onMounted(() => {
+  loadQuickStarts()
+  pollTimer.value = window.setInterval(loadQuickStarts, 5000)
+})
+
+onBeforeUnmount(() => {
+  if (pollTimer.value) {
+    window.clearInterval(pollTimer.value)
+  }
+})
 </script>

@@ -83,9 +83,21 @@ public class AppStateStore {
 
   public synchronized AppState.QuickStartSession recordQuickStart(AppState.QuickStartSession session) throws IOException {
     state.getQuickStarts().add(0, session);
-    addTimeline("一键开训已生成", session.getProjectName() + " 已根据上传图片和目标描述生成。");
+    addTimeline("一键开训已接收", defaultText(session.getProjectName(), session.getTargetDescription()) + " 已接收上传，正在后台处理。");
     save();
     return session;
+  }
+
+  public synchronized AppState.QuickStartSession updateQuickStart(AppState.QuickStartSession session) throws IOException {
+    for (int index = 0; index < state.getQuickStarts().size(); index++) {
+      AppState.QuickStartSession item = state.getQuickStarts().get(index);
+      if (item != null && item.getId().equals(session.getId())) {
+        state.getQuickStarts().set(index, session);
+        save();
+        return session;
+      }
+    }
+    throw new IllegalArgumentException("一键开训记录不存在");
   }
 
   public synchronized void save() throws IOException {
