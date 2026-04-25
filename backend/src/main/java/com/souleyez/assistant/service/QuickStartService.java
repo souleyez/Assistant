@@ -93,19 +93,25 @@ public class QuickStartService {
     Path extractedRoot = runRoot.resolve("source");
     Path datasetRoot = runRoot.resolve("dataset");
     Files.createDirectories(incomingRoot);
-    Files.createDirectories(extractedRoot);
 
-    materializeUploads(files, incomingRoot, extractedRoot);
-
-    DatasetScan initialScan = inspectUploads(extractedRoot, datasetRoot);
-    if (initialScan.getImageCount() == 0) {
-      throw new IllegalArgumentException("未识别到图片文件，支持 zip 或 jpg/png/webp/bmp。");
+    int uploadedFileCount = saveUploads(files, incomingRoot);
+    if (uploadedFileCount == 0) {
+      throw new IllegalArgumentException("请至少上传一张图片或一个 zip。");
     }
 
-    AppState.QuickStartSession session = buildProcessingSession(quickStartId, targetDescription, initialScan);
+    AppState.QuickStartSession session = buildUploadedSession(quickStartId, targetDescription, incomingRoot, uploadedFileCount);
     store.recordQuickStart(session);
-    LOGGER.info("Quick Start {} accepted: {} images, {} labels", quickStartId, initialScan.getImageCount(), initialScan.getLabeledImageCount());
-    enqueueQuickStartProcessing(quickStartId, targetDescription, initialScan, autoStart, runRoot, session.getCreatedAt());
+    LOGGER.info("Quick Start {} accepted: {} uploaded files", quickStartId, uploadedFileCount);
+    enqueueQuickStartProcessing(
+        quickStartId,
+        targetDescription,
+        autoStart,
+        runRoot,
+        incomingRoot,
+        extractedRoot,
+        datasetRoot,
+        session.getCreatedAt()
+    );
 
     Map<String, Object> response = new LinkedHashMap<String, Object>();
     response.put("item", session);
@@ -118,34 +124,56 @@ public class QuickStartService {
 
   private void enqueueQuickStartProcessing(final String quickStartId,
                                            final String targetDescription,
-                                           final DatasetScan initialScan,
                                            final boolean autoStart,
                                            final Path runRoot,
+                                           final Path incomingRoot,
+                                           final Path extractedRoot,
+                                           final Path datasetRoot,
                                            final String createdAt) {
     quickStartExecutor.submit(new Runnable() {
       @Override
       public void run() {
-        processQuickStart(quickStartId, targetDescription, initialScan, autoStart, runRoot, createdAt);
+        processQuickStart(quickStartId, targetDescription, autoStart, runRoot, incomingRoot, extractedRoot, datasetRoot, createdAt);
       }
     });
   }
 
   private void processQuickStart(String quickStartId,
                                  String targetDescription,
-                                 DatasetScan initialScan,
                                  boolean autoStart,
                                  Path runRoot,
+                                 Path incomingRoot,
+                                 Path extractedRoot,
+                                 Path datasetRoot,
                                  String createdAt) {
+    DatasetScan initialScan = null;
     try {
       LOGGER.info("Quick Start {} processing started", quickStartId);
       updateQuickStartProgress(
           quickStartId,
           targetDescription,
-          initialScan,
+          incomingRoot,
+          0,
+          0,
           createdAt,
-          "gemma-planning",
-          "Gemma 4 正在理解目标描述并生成训练方案。"
+          "extracting",
+          "上传已完成，后台正在解压和整理图片。"
       );
+
+    expandIncomingUploads(incomingRoot, extractedRoot);
+    initialScan = inspectUploads(extractedRoot, datasetRoot);
+    if (initialScan.getImageCount() == 0) {
+      throw new IllegalArgumentException("未识别到图片文件，支持 zip 或 jpg/png/webp/bmp。");
+    }
+
+    updateQuickStartProgress(
+        quickStartId,
+        targetDescription,
+        initialScan,
+        createdAt,
+        "gemma-planning",
+        "Gemma 4 正在理解目标描述并生成训练方案。"
+    );
 
     GemmaRuntimeService.QuickStartPlan plan = gemmaRuntimeService.planQuickStart(
         targetDescription,
@@ -249,6 +277,7 @@ public class QuickStartService {
             quickStartId,
             targetDescription,
             initialScan,
+            incomingRoot,
             createdAt,
             exception
         );
@@ -262,14 +291,39 @@ public class QuickStartService {
   private AppState.QuickStartSession buildProcessingSession(String quickStartId,
                                                             String targetDescription,
                                                             DatasetScan initialScan) {
+    return buildProcessingSession(
+        quickStartId,
+        targetDescription,
+        initialScan.getDatasetPath(),
+        initialScan.getImageCount(),
+        initialScan.getLabeledImageCount()
+    );
+  }
+
+  private AppState.QuickStartSession buildUploadedSession(String quickStartId,
+                                                          String targetDescription,
+                                                          Path incomingRoot,
+                                                          int uploadedFileCount) {
+    AppState.QuickStartSession session = buildProcessingSession(quickStartId, targetDescription, incomingRoot, 0, 0);
+    session.setStatus("uploaded");
+    session.setNextAction("上传已完成，后台会慢慢解压、识别目标并自动预标注。");
+    session.setGemmaSummary("已接收 " + uploadedFileCount + " 个文件。图片扫描和 Gemma 解析将在后台执行。");
+    return session;
+  }
+
+  private AppState.QuickStartSession buildProcessingSession(String quickStartId,
+                                                            String targetDescription,
+                                                            Path uploadPath,
+                                                            int imageCount,
+                                                            int labeledImageCount) {
     AppState.QuickStartSession session = new AppState.QuickStartSession();
     session.setId(quickStartId);
     session.setTargetDescription(targetDescription);
     session.setDatasetName("待生成数据集");
     session.setProjectName("训练方案生成中");
-    session.setUploadPath(initialScan.getDatasetPath().toString());
-    session.setImageCount(initialScan.getImageCount());
-    session.setLabeledImageCount(initialScan.getLabeledImageCount());
+    session.setUploadPath(uploadPath.toString());
+    session.setImageCount(imageCount);
+    session.setLabeledImageCount(labeledImageCount);
     session.setReadyForTraining(false);
     session.setAutoStarted(false);
     session.setStatus("processing");
@@ -288,7 +342,33 @@ public class QuickStartService {
                                         String createdAt,
                                         String status,
                                         String nextAction) throws IOException {
-    AppState.QuickStartSession session = buildProcessingSession(quickStartId, targetDescription, scan);
+    updateQuickStartProgress(
+        quickStartId,
+        targetDescription,
+        scan.getDatasetPath(),
+        scan.getImageCount(),
+        scan.getLabeledImageCount(),
+        createdAt,
+        status,
+        nextAction
+    );
+  }
+
+  private void updateQuickStartProgress(String quickStartId,
+                                        String targetDescription,
+                                        Path uploadPath,
+                                        int imageCount,
+                                        int labeledImageCount,
+                                        String createdAt,
+                                        String status,
+                                        String nextAction) throws IOException {
+    AppState.QuickStartSession session = buildProcessingSession(
+        quickStartId,
+        targetDescription,
+        uploadPath,
+        imageCount,
+        labeledImageCount
+    );
     session.setCreatedAt(createdAt);
     session.setStatus(status);
     session.setNextAction(nextAction);
@@ -298,14 +378,17 @@ public class QuickStartService {
   private AppState.QuickStartSession buildFailedSession(String quickStartId,
                                                         String targetDescription,
                                                         DatasetScan scan,
+                                                        Path fallbackPath,
                                                         String createdAt,
                                                         Exception exception) {
-    AppState.QuickStartSession session = buildProcessingSession(quickStartId, targetDescription, scan);
+    AppState.QuickStartSession session = scan == null
+        ? buildProcessingSession(quickStartId, targetDescription, fallbackPath, 0, 0)
+        : buildProcessingSession(quickStartId, targetDescription, scan);
     session.setCreatedAt(createdAt);
     session.setStatus("failed");
     session.setWarning("后台处理失败: " + defaultText(exception.getMessage(), exception.getClass().getSimpleName()));
-    session.setNextAction("请检查上传文件是否为图片或 YOLO 数据集 zip；如果仍失败，再查看后端日志。");
-    session.setGemmaSummary("上传已保存，但 Gemma 解析、自动预标注或项目创建阶段失败。");
+    session.setNextAction("上传文件已保存。请检查文件是否为图片或 YOLO 数据集 zip；如果仍失败，再查看后端日志。");
+    session.setGemmaSummary("上传已保存，但后台解压、Gemma 解析、自动预标注或项目创建阶段失败。");
     return session;
   }
 
@@ -316,7 +399,8 @@ public class QuickStartService {
     return "生成检测训练方案。";
   }
 
-  private void materializeUploads(MultipartFile[] files, Path incomingRoot, Path extractedRoot) throws IOException {
+  private int saveUploads(MultipartFile[] files, Path incomingRoot) throws IOException {
+    int uploadedFileCount = 0;
     for (MultipartFile file : files) {
       if (file == null || file.isEmpty()) {
         continue;
@@ -326,12 +410,26 @@ public class QuickStartService {
       try (InputStream inputStream = file.getInputStream()) {
         Files.copy(inputStream, incomingFile, StandardCopyOption.REPLACE_EXISTING);
       }
-      if (safeName.toLowerCase(Locale.ROOT).endsWith(".zip")) {
-        unzip(incomingFile, extractedRoot.resolve(stripExtension(safeName)));
-      } else {
-        Path flatRoot = extractedRoot.resolve("flat");
-        Files.createDirectories(flatRoot);
-        Files.copy(incomingFile, flatRoot.resolve(safeName), StandardCopyOption.REPLACE_EXISTING);
+      uploadedFileCount++;
+    }
+    return uploadedFileCount;
+  }
+
+  private void expandIncomingUploads(Path incomingRoot, Path extractedRoot) throws IOException {
+    Files.createDirectories(extractedRoot);
+    try (Stream<Path> stream = Files.list(incomingRoot)) {
+      List<Path> uploads = new ArrayList<Path>();
+      stream.filter(Files::isRegularFile).forEach(uploads::add);
+      Collections.sort(uploads);
+      for (Path incomingFile : uploads) {
+        String safeName = incomingFile.getFileName().toString();
+        if (safeName.toLowerCase(Locale.ROOT).endsWith(".zip")) {
+          unzip(incomingFile, extractedRoot.resolve(stripExtension(safeName)));
+        } else {
+          Path flatRoot = extractedRoot.resolve("flat");
+          Files.createDirectories(flatRoot);
+          Files.copy(incomingFile, flatRoot.resolve(safeName), StandardCopyOption.REPLACE_EXISTING);
+        }
       }
     }
   }

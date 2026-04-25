@@ -312,8 +312,8 @@ async function submitQuickStart() {
     })
     lastResult.value = response
     await loadQuickStarts()
-    if (['processing', 'gemma-planning', 'auto-labeling'].includes(response.item?.status)) {
-      message.value = '上传已接收，系统正在后台解析目标、自动预标注并准备训练；页面会自动刷新状态。'
+    if (['uploaded', 'processing', 'extracting', 'gemma-planning', 'auto-labeling'].includes(response.item?.status)) {
+      message.value = '上传已接收，系统会在后台解压、解析目标、自动预标注并准备训练；页面会自动刷新状态。'
     } else if (response.job) {
       message.value = 'Gemma 解析和自动预标注已完成，训练任务已自动创建。'
     } else if (response.item?.autoLabelStatus === 'partial') {
