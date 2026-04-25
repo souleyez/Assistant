@@ -35,15 +35,17 @@ public class GemmaRuntimeService {
 
   public GemmaRuntimeService(
       @Value("${assistant.gemma.ollama-url:http://127.0.0.1:11435}") String ollamaUrl,
-      @Value("${assistant.gemma.model:gemma4:26b}") String model,
-      @Value("${assistant.gemma.fallback-model:gemma4:e4b}") String fallbackModel
+      @Value("${assistant.gemma.model:gemma4:e4b}") String model,
+      @Value("${assistant.gemma.fallback-model:gemma4:26b}") String fallbackModel,
+      @Value("${assistant.gemma.connect-timeout-ms:2000}") int connectTimeoutMs,
+      @Value("${assistant.gemma.read-timeout-ms:60000}") int readTimeoutMs
   ) {
     SimpleClientHttpRequestFactory requestFactory = new SimpleClientHttpRequestFactory();
-    requestFactory.setConnectTimeout(2000);
-    requestFactory.setReadTimeout(180000);
+    requestFactory.setConnectTimeout(connectTimeoutMs);
+    requestFactory.setReadTimeout(readTimeoutMs);
     this.restTemplate = new RestTemplate(requestFactory);
     this.ollamaUrl = trimTrailingSlash(ollamaUrl);
-    this.primaryModel = defaultModelName(model, "gemma4:26b");
+    this.primaryModel = defaultModelName(model, "gemma4:e4b");
     this.fallbackModel = normalizeFallbackModel(fallbackModel, this.primaryModel);
   }
 
