@@ -3,6 +3,7 @@ package com.souleyez.assistant.service;
 import com.souleyez.assistant.domain.AppState;
 import java.io.IOException;
 import java.io.InputStream;
+import java.io.OutputStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
@@ -33,6 +34,7 @@ import org.springframework.web.multipart.MultipartFile;
 public class QuickStartService {
   private static final Logger LOGGER = LoggerFactory.getLogger(QuickStartService.class);
   private final Path quickStartRoot = Paths.get("data", "runtime", "quick-start");
+  private final Path chunkUploadRoot = quickStartRoot.resolve("_chunk-uploads");
   private final ExecutorService quickStartExecutor = Executors.newSingleThreadExecutor(new ThreadFactory() {
     @Override
     public Thread newThread(Runnable runnable) {
@@ -112,6 +114,88 @@ public class QuickStartService {
         datasetRoot,
         session.getCreatedAt()
     );
+
+    Map<String, Object> response = new LinkedHashMap<String, Object>();
+    response.put("item", session);
+    response.put("dataset", null);
+    response.put("project", null);
+    response.put("job", null);
+    response.put("runtime", summary().get("runtime"));
+    return response;
+  }
+
+  public Map<String, Object> uploadChunk(String uploadId,
+                                         String fileName,
+                                         int fileIndex,
+                                         int chunkIndex,
+                                         MultipartFile chunk) throws IOException {
+    if (!StringUtils.hasText(uploadId)) {
+      throw new IllegalArgumentException("上传批次不能为空。");
+    }
+    if (!StringUtils.hasText(fileName)) {
+      throw new IllegalArgumentException("文件名不能为空。");
+    }
+    if (fileIndex < 0 || chunkIndex < 0) {
+      throw new IllegalArgumentException("分片编号不正确。");
+    }
+    if (chunk == null || chunk.isEmpty()) {
+      throw new IllegalArgumentException("上传分片为空。");
+    }
+
+    Path fileChunkRoot = chunkFileRoot(uploadId, fileIndex, fileName);
+    Files.createDirectories(fileChunkRoot);
+    Files.write(fileChunkRoot.resolve("filename.txt"), sanitizeFileName(fileName).getBytes("UTF-8"));
+    Path chunkPath = fileChunkRoot.resolve(String.format(Locale.ROOT, "chunk-%06d.part", chunkIndex));
+    try (InputStream inputStream = chunk.getInputStream()) {
+      Files.copy(inputStream, chunkPath, StandardCopyOption.REPLACE_EXISTING);
+    }
+
+    Map<String, Object> response = new LinkedHashMap<String, Object>();
+    response.put("uploadId", sanitizeUploadId(uploadId));
+    response.put("fileIndex", fileIndex);
+    response.put("chunkIndex", chunkIndex);
+    response.put("received", Boolean.TRUE);
+    return response;
+  }
+
+  public Map<String, Object> completeChunkedQuickStart(String uploadId,
+                                                       String targetDescription,
+                                                       boolean autoStart) throws IOException {
+    if (!StringUtils.hasText(targetDescription)) {
+      throw new IllegalArgumentException("请先描述要捕获的目标。");
+    }
+    Path uploadRoot = chunkUploadRoot.resolve(sanitizeUploadId(uploadId));
+    if (!Files.isDirectory(uploadRoot)) {
+      throw new IllegalArgumentException("没有找到上传分片，请重新上传。");
+    }
+
+    Files.createDirectories(quickStartRoot);
+    String quickStartId = "qs-" + UUID.randomUUID().toString().substring(0, 8);
+    Path runRoot = quickStartRoot.resolve(quickStartId);
+    Path incomingRoot = runRoot.resolve("incoming");
+    Path extractedRoot = runRoot.resolve("source");
+    Path datasetRoot = runRoot.resolve("dataset");
+    Files.createDirectories(incomingRoot);
+
+    int uploadedFileCount = assembleChunkedUploads(uploadRoot, incomingRoot);
+    if (uploadedFileCount == 0) {
+      throw new IllegalArgumentException("没有找到可合并的上传文件，请重新上传。");
+    }
+
+    AppState.QuickStartSession session = buildUploadedSession(quickStartId, targetDescription, incomingRoot, uploadedFileCount);
+    store.recordQuickStart(session);
+    LOGGER.info("Quick Start {} accepted from chunked upload {}: {} files", quickStartId, sanitizeUploadId(uploadId), uploadedFileCount);
+    enqueueQuickStartProcessing(
+        quickStartId,
+        targetDescription,
+        autoStart,
+        runRoot,
+        incomingRoot,
+        extractedRoot,
+        datasetRoot,
+        session.getCreatedAt()
+    );
+    deleteRecursively(uploadRoot);
 
     Map<String, Object> response = new LinkedHashMap<String, Object>();
     response.put("item", session);
@@ -399,6 +483,89 @@ public class QuickStartService {
     return "生成检测训练方案。";
   }
 
+  private Path chunkFileRoot(String uploadId, int fileIndex, String fileName) {
+    String safeFileName = sanitizeFileName(fileName);
+    String safeDirName = String.format(Locale.ROOT, "%05d-%s", fileIndex, safeFileName).replaceAll("[^a-zA-Z0-9._-]+", "_");
+    return chunkUploadRoot.resolve(sanitizeUploadId(uploadId)).resolve(safeDirName);
+  }
+
+  private int assembleChunkedUploads(Path uploadRoot, Path incomingRoot) throws IOException {
+    List<Path> fileRoots = new ArrayList<Path>();
+    try (Stream<Path> stream = Files.list(uploadRoot)) {
+      stream.filter(Files::isDirectory).forEach(fileRoots::add);
+    }
+    Collections.sort(fileRoots);
+
+    int assembledCount = 0;
+    for (Path fileRoot : fileRoots) {
+      String fileName = readChunkFileName(fileRoot);
+      List<Path> chunks = new ArrayList<Path>();
+      try (Stream<Path> stream = Files.list(fileRoot)) {
+        stream.filter(Files::isRegularFile)
+            .filter(path -> path.getFileName().toString().endsWith(".part"))
+            .forEach(chunks::add);
+      }
+      Collections.sort(chunks);
+      if (chunks.isEmpty()) {
+        continue;
+      }
+      Path target = resolveUniqueIncomingFile(incomingRoot, fileName);
+      try (OutputStream outputStream = Files.newOutputStream(target)) {
+        for (Path chunkPath : chunks) {
+          Files.copy(chunkPath, outputStream);
+        }
+      }
+      assembledCount++;
+    }
+    return assembledCount;
+  }
+
+  private String readChunkFileName(Path fileRoot) throws IOException {
+    Path fileNamePath = fileRoot.resolve("filename.txt");
+    if (Files.exists(fileNamePath)) {
+      return sanitizeFileName(new String(Files.readAllBytes(fileNamePath), "UTF-8"));
+    }
+    String fallback = fileRoot.getFileName().toString();
+    int separator = fallback.indexOf('-');
+    return sanitizeFileName(separator >= 0 ? fallback.substring(separator + 1) : fallback);
+  }
+
+  private Path resolveUniqueIncomingFile(Path incomingRoot, String fileName) throws IOException {
+    String safeName = sanitizeFileName(fileName);
+    Path candidate = incomingRoot.resolve(safeName);
+    if (!Files.exists(candidate)) {
+      return candidate;
+    }
+    String baseName = stripExtension(safeName);
+    String extension = extensionOf(safeName);
+    for (int index = 1; index < 10000; index++) {
+      candidate = incomingRoot.resolve(baseName + "-" + index + extension);
+      if (!Files.exists(candidate)) {
+        return candidate;
+      }
+    }
+    throw new IOException("无法生成唯一文件名: " + safeName);
+  }
+
+  private void deleteRecursively(Path root) throws IOException {
+    if (!Files.exists(root)) {
+      return;
+    }
+    List<Path> paths = new ArrayList<Path>();
+    try (Stream<Path> stream = Files.walk(root)) {
+      stream.forEach(paths::add);
+    }
+    Collections.sort(paths, new Comparator<Path>() {
+      @Override
+      public int compare(Path left, Path right) {
+        return Integer.compare(right.getNameCount(), left.getNameCount());
+      }
+    });
+    for (Path path : paths) {
+      Files.deleteIfExists(path);
+    }
+  }
+
   private int saveUploads(MultipartFile[] files, Path incomingRoot) throws IOException {
     int uploadedFileCount = 0;
     for (MultipartFile file : files) {
@@ -577,6 +744,15 @@ public class QuickStartService {
   private String sanitizeFileName(String originalName) {
     String fileName = StringUtils.hasText(originalName) ? originalName : "upload.bin";
     return fileName.replace("\\", "/").replaceAll(".*/", "");
+  }
+
+  private String sanitizeUploadId(String uploadId) {
+    String normalized = StringUtils.hasText(uploadId) ? uploadId : "upload";
+    normalized = normalized.replaceAll("[^a-zA-Z0-9._-]+", "-");
+    if (!StringUtils.hasText(normalized)) {
+      return "upload";
+    }
+    return normalized.length() > 80 ? normalized.substring(0, 80) : normalized;
   }
 
   private String stripExtension(String fileName) {

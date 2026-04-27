@@ -36,4 +36,24 @@ public class QuickStartController {
   ) throws IOException {
     return quickStartService.createQuickStart(files, targetDescription, autoStart);
   }
+
+  @PostMapping(value = "/chunk", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+  public Map<String, Object> uploadChunk(
+      @RequestParam("uploadId") @NotBlank String uploadId,
+      @RequestParam("fileName") @NotBlank String fileName,
+      @RequestParam("fileIndex") int fileIndex,
+      @RequestParam("chunkIndex") int chunkIndex,
+      @RequestParam("chunk") MultipartFile chunk
+  ) throws IOException {
+    return quickStartService.uploadChunk(uploadId, fileName, fileIndex, chunkIndex, chunk);
+  }
+
+  @PostMapping(value = "/complete", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+  public Map<String, Object> completeChunkedUpload(
+      @RequestParam("uploadId") @NotBlank String uploadId,
+      @RequestParam("targetDescription") @NotBlank String targetDescription,
+      @RequestParam(value = "autoStart", defaultValue = "true") boolean autoStart
+  ) throws IOException {
+    return quickStartService.completeChunkedQuickStart(uploadId, targetDescription, autoStart);
+  }
 }

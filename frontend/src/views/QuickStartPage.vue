@@ -55,7 +55,7 @@
             </button>
             <button class="button button-secondary" :disabled="submitting" @click="clearForm">清空</button>
           </div>
-          <small v-if="submitting" class="table-subtle">文件正在上传；上传完成后，Gemma 解析、自动预标注和训练准备会转入后台继续执行。</small>
+          <small v-if="submitting" class="table-subtle">{{ uploadProgressText }}</small>
         </div>
       </article>
 
@@ -210,6 +210,8 @@ import { request } from '../api'
 import EmptyState from '../components/EmptyState.vue'
 import PageHeader from '../components/PageHeader.vue'
 
+const CHUNK_SIZE = 512 * 1024
+
 const fileInput = ref(null)
 const items = ref([])
 const runtime = ref({
@@ -229,6 +231,7 @@ const message = ref('')
 const error = ref('')
 const lastResult = ref(null)
 const pollTimer = ref(null)
+const uploadProgress = ref(0)
 
 const imageFileCount = computed(() =>
   selectedFiles.value.filter((file) => /\.(jpg|jpeg|png|webp|bmp)$/i.test(file.name)).length
@@ -240,6 +243,13 @@ const uploadTotalSize = computed(() =>
   selectedFiles.value.reduce((total, file) => total + (file.size || 0), 0)
 )
 const uploadTotalSizeLabel = computed(() => formatBytes(uploadTotalSize.value))
+const uploadProgressText = computed(() => {
+  const percent = Math.round(uploadProgress.value)
+  if (percent >= 100) {
+    return '上传完成，正在提交后台处理任务。'
+  }
+  return `文件正在分片上传 ${percent}%；上传完成后，Gemma 解析、自动预标注和训练准备会转入后台继续执行。`
+})
 
 function formatTime(value) {
   return new Intl.DateTimeFormat('zh-CN', {
@@ -299,17 +309,11 @@ function syncLastResultFromItems() {
 
 async function submitQuickStart() {
   submitting.value = true
+  uploadProgress.value = 0
   message.value = ''
   error.value = ''
   try {
-    const formData = new FormData()
-    selectedFiles.value.forEach((file) => formData.append('files', file))
-    formData.append('targetDescription', targetDescription.value)
-    formData.append('autoStart', String(autoStart.value))
-    const response = await request('/api/quick-start', {
-      method: 'POST',
-      body: formData,
-    })
+    const response = await submitChunkedQuickStart()
     lastResult.value = response
     await loadQuickStarts()
     if (['uploaded', 'processing', 'extracting', 'gemma-planning', 'auto-labeling'].includes(response.item?.status)) {
@@ -329,6 +333,51 @@ async function submitQuickStart() {
   } finally {
     submitting.value = false
   }
+}
+
+function buildUploadId() {
+  if (typeof crypto !== 'undefined' && crypto.randomUUID) {
+    return `quick-${crypto.randomUUID()}`
+  }
+  return `quick-${Date.now()}-${Math.random().toString(16).slice(2)}`
+}
+
+async function submitChunkedQuickStart() {
+  const uploadId = buildUploadId()
+  const totalBytes = Math.max(uploadTotalSize.value, 1)
+  let uploadedBytes = 0
+
+  for (let fileIndex = 0; fileIndex < selectedFiles.value.length; fileIndex++) {
+    const file = selectedFiles.value[fileIndex]
+    const totalChunks = Math.max(1, Math.ceil(file.size / CHUNK_SIZE))
+    for (let chunkIndex = 0; chunkIndex < totalChunks; chunkIndex++) {
+      const start = chunkIndex * CHUNK_SIZE
+      const end = Math.min(start + CHUNK_SIZE, file.size)
+      const chunk = file.slice(start, end)
+      const formData = new FormData()
+      formData.append('uploadId', uploadId)
+      formData.append('fileName', file.name)
+      formData.append('fileIndex', String(fileIndex))
+      formData.append('chunkIndex', String(chunkIndex))
+      formData.append('chunk', chunk, `${file.name}.part-${chunkIndex}`)
+      await request('/api/quick-start/chunk', {
+        method: 'POST',
+        body: formData,
+      })
+      uploadedBytes += chunk.size
+      uploadProgress.value = Math.min(100, (uploadedBytes / totalBytes) * 100)
+    }
+  }
+
+  uploadProgress.value = 100
+  const completeForm = new FormData()
+  completeForm.append('uploadId', uploadId)
+  completeForm.append('targetDescription', targetDescription.value)
+  completeForm.append('autoStart', String(autoStart.value))
+  return request('/api/quick-start/complete', {
+    method: 'POST',
+    body: completeForm,
+  })
 }
 
 onMounted(() => {
